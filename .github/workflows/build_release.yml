@@ -31,6 +31,10 @@ jobs:
       - name: Analyze Project
         run: flutter analyze
 
+      - name: Generate Production Release Keystore
+        run: |
+          keytool -genkey -v -keystore android/app/release.keystore -alias subghost -keyalg RSA -keysize 2048 -validity 10000 -storepass subghostpass -keypass subghostpass -dname "CN=SubGhost, OU=SubGhost, O=SubGhost, L=City, S=State, C=US"
+
       - name: Build Android App Bundle (.aab for Google Play)
         run: flutter build appbundle --release
 
