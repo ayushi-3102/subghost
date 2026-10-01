@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +19,7 @@ class SettingsSheet extends ConsumerWidget {
     final isPro = ref.watch(isProProvider);
     final currency = ref.watch(currencyProvider);
     final isBiometricOn = ref.watch(biometricEnabledProvider);
+    final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
     return Container(
       decoration: const BoxDecoration(
@@ -154,10 +156,39 @@ class SettingsSheet extends ConsumerWidget {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                       activeTrackColor: const Color(0xFF8B5CF6),
                       secondary: const Icon(CupertinoIcons.lock_shield_fill, color: Color(0xFF10B981)),
-                      title: const Text("FaceID Biometric Lock", style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
-                      subtitle: Text("Require biometric scan to open vault", style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12)),
-                      value: isBiometricOn,
+                      title: Row(
+                        children: [
+                          Text(
+                            isAndroid ? "Biometric Security Lock" : "FaceID Biometric Lock",
+                            style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
+                          if (!isPro) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.5)),
+                              ),
+                              child: const Text("PRO", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFFFDE68A))),
+                            ),
+                          ],
+                        ],
+                      ),
+                      subtitle: Text(
+                        isAndroid ? "Require fingerprint or face scan to open vault" : "Require FaceID scan to open vault",
+                        style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
+                      ),
+                      value: isPro && isBiometricOn,
                       onChanged: (val) {
+                        if (!isPro) {
+                          HapticFeedback.heavyImpact();
+                          Navigator.of(context).push(
+                            CupertinoPageRoute(fullscreenDialog: true, builder: (_) => const PaywallScreen()),
+                          );
+                          return;
+                        }
                         HapticFeedback.mediumImpact();
                         ref.read(biometricEnabledProvider.notifier).toggle();
                       },
@@ -198,10 +229,33 @@ class SettingsSheet extends ConsumerWidget {
                 child: ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   leading: const Icon(CupertinoIcons.doc_text_fill, color: Color(0xFF06B6D4)),
-                  title: const Text("Export Vault to CSV", style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                  title: Row(
+                    children: [
+                      const Text("Export Vault to CSV", style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                      if (!isPro) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.5)),
+                          ),
+                          child: const Text("PRO", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFFFDE68A))),
+                        ),
+                      ],
+                    ],
+                  ),
                   subtitle: Text("Generate spreadsheet for tax & accounting", style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12)),
-                  trailing: const Icon(CupertinoIcons.share, color: Colors.white54, size: 18),
+                  trailing: Icon(isPro ? CupertinoIcons.share : CupertinoIcons.lock_fill, color: isPro ? Colors.white54 : const Color(0xFFF59E0B), size: 18),
                   onTap: () {
+                    if (!isPro) {
+                      HapticFeedback.heavyImpact();
+                      Navigator.of(context).push(
+                        CupertinoPageRoute(fullscreenDialog: true, builder: (_) => const PaywallScreen()),
+                      );
+                      return;
+                    }
                     HapticFeedback.heavyImpact();
                     final csv = StorageService.exportToCsv();
                     Clipboard.setData(ClipboardData(text: csv));
@@ -343,8 +397,8 @@ class SettingsSheet extends ConsumerWidget {
 
               const SizedBox(height: 22),
 
-              // Section 5: Legal Disclosures (Mandatory for Apple Review)
-              _buildSectionTitle("LEGAL & PRIVACY (APPLE REVIEW COMPLIANT)"),
+              // Section 5: Legal Disclosures
+              _buildSectionTitle(isAndroid ? "LEGAL & PRIVACY (GOOGLE PLAY COMPLIANT)" : "LEGAL & PRIVACY (APPLE REVIEW COMPLIANT)"),
               Container(
                 decoration: BoxDecoration(
                   color: const Color(0xFF130E22),
@@ -371,22 +425,27 @@ class SettingsSheet extends ConsumerWidget {
                     ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                       leading: const Icon(CupertinoIcons.doc_plaintext, color: Colors.white60, size: 18),
-                      title: const Text("Terms of Service (EULA)", style: TextStyle(color: Colors.white, fontSize: 13.5)),
+                      title: Text(isAndroid ? "Terms of Service (Google Play)" : "Terms of Service (EULA)", style: const TextStyle(color: Colors.white, fontSize: 13.5)),
                       trailing: const Icon(CupertinoIcons.chevron_right, color: Colors.white24, size: 14),
                       onTap: () => _showLegalDialog(
                         context,
-                        "Terms of Service (EULA)",
-                        "SubGhost is licensed under the standard Apple End User License Agreement (EULA).\n\n"
-                        "1. License: You are granted a personal, non-exclusive license to use SubGhost on supported iOS and iPadOS devices.\n\n"
-                        "2. Subscriptions: Payment will be charged to your Apple ID account upon purchase confirmation. Subscriptions auto-renew unless cancelled at least 24 hours prior to the current period end.\n\n"
-                        "3. Restoration: You may restore active lifetime or subscription purchases on any device linked to your Apple ID at any time.",
+                        isAndroid ? "Terms of Service (Google Play)" : "Terms of Service (EULA)",
+                        isAndroid
+                            ? "SubGhost is licensed under Google Play Developer policies.\n\n"
+                              "1. License: You are granted a personal, non-exclusive license to use SubGhost on supported Android devices.\n\n"
+                              "2. Subscriptions: Payment will be charged to your Google Account upon purchase confirmation. Subscriptions auto-renew unless cancelled in Google Play Subscriptions at least 24 hours prior to the current period end.\n\n"
+                              "3. Restoration: You may restore active lifetime or subscription purchases on any device linked to your Google Account at any time."
+                            : "SubGhost is licensed under the standard Apple End User License Agreement (EULA).\n\n"
+                              "1. License: You are granted a personal, non-exclusive license to use SubGhost on supported iOS and iPadOS devices.\n\n"
+                              "2. Subscriptions: Payment will be charged to your Apple ID account upon purchase confirmation. Subscriptions auto-renew unless cancelled at least 24 hours prior to the current period end.\n\n"
+                              "3. Restoration: You may restore active lifetime or subscription purchases on any device linked to your Apple ID at any time.",
                       ),
                     ),
                     Divider(color: Colors.white.withValues(alpha: 0.05), height: 1),
                     ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                       leading: const Icon(CupertinoIcons.arrow_clockwise, color: Colors.white60, size: 18),
-                      title: const Text("Restore StoreKit Purchases", style: TextStyle(color: Colors.white, fontSize: 13.5)),
+                      title: Text(isAndroid ? "Restore Google Play Purchases" : "Restore StoreKit Purchases", style: const TextStyle(color: Colors.white, fontSize: 13.5)),
                       trailing: const Icon(CupertinoIcons.chevron_right, color: Colors.white24, size: 14),
                       onTap: () async {
                         HapticFeedback.lightImpact();
@@ -395,14 +454,74 @@ class SettingsSheet extends ConsumerWidget {
                           ref.read(isProProvider.notifier).checkStatus();
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(success ? "Purchases successfully restored!" : "No active license found."),
-                              backgroundColor: const Color(0xFF8B5CF6),
+                              content: Text(success ? "Purchases successfully restored!" : (isAndroid ? "No previous Google Play license found." : "No active Apple license found.")),
+                              backgroundColor: success ? const Color(0xFF8B5CF6) : const Color(0xFF374151),
                             ),
                           );
                         }
                       },
                     ),
                   ],
+                ),
+              ),
+
+              const SizedBox(height: 22),
+
+              // Section 6: Developer Test Lab
+              _buildSectionTitle("DEVELOPER TEST LAB (TIER SWITCHER)"),
+              Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF130E22),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                ),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  leading: Icon(
+                    isPro ? CupertinoIcons.shield_lefthalf_fill : CupertinoIcons.lock,
+                    color: isPro ? const Color(0xFFA855F7) : const Color(0xFFF59E0B),
+                    size: 20,
+                  ),
+                  title: Text(
+                    isPro ? "Current: VIP Mode" : "Current: Free Tier Mode (3 Limit)",
+                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    isPro ? "Tap to switch to Free Tier and test limits" : "Tap to switch to VIP and unlock all features",
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
+                  ),
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: isPro ? const Color(0xFF3B0764) : const Color(0xFF291B00),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: isPro ? const Color(0xFFA855F7) : const Color(0xFFF59E0B),
+                        width: 1,
+                      ),
+                    ),
+                    child: Text(
+                      isPro ? "Test Free" : "Test VIP",
+                      style: TextStyle(
+                        color: isPro ? const Color(0xFFE9D5FF) : const Color(0xFFFDE68A),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  onTap: () async {
+                    HapticFeedback.heavyImpact();
+                    await ref.read(isProProvider.notifier).toggleDebug();
+                    if (context.mounted) {
+                      final nowPro = ref.read(isProProvider);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(nowPro ? "Switched to VIP Tier (Unlocked)" : "Switched to Free Tier (3-Vault Limit & Locked Pro Features)"),
+                          backgroundColor: nowPro ? const Color(0xFF8B5CF6) : const Color(0xFFF59E0B),
+                        ),
+                      );
+                    }
+                  },
                 ),
               ),
 

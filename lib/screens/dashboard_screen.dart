@@ -373,7 +373,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          _activeNavIndex == 1 ? "Upcoming Renewals (<14d)" : "Active Services",
+                          _activeNavIndex == 1
+                              ? "Upcoming Renewals (<30d)"
+                              : (_activeNavIndex == 2 ? "Runway Analytics" : "Active Services"),
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
@@ -397,40 +399,46 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                 ),
 
-                // Subscriptions List with Stitch Brand Badges
-                if (filteredSubs.isEmpty)
+                if (_activeNavIndex == 2 && !isPro)
                   SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 24),
-                      child: Center(
-                        child: Text(
-                          "No subscriptions found",
-                          style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.35)),
+                    child: _buildStitchAnalyticsProGate(context),
+                  )
+                else ...[
+                  // Subscriptions List with Stitch Brand Badges
+                  if (filteredSubs.isEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Center(
+                          child: Text(
+                            "No subscriptions found",
+                            style: TextStyle(fontSize: 14, color: Colors.white.withValues(alpha: 0.35)),
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, index) {
+                            final sub = filteredSubs[index];
+                            return _buildStitchSubscriptionItem(context, ref, sub, currency);
+                          },
+                          childCount: filteredSubs.length,
                         ),
                       ),
                     ),
-                  )
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final sub = filteredSubs[index];
-                          return _buildStitchSubscriptionItem(context, ref, sub, currency);
-                        },
-                        childCount: filteredSubs.length,
-                      ),
+
+                  // 📈 Stitch 6-Month Cash Flow Sparkline Graph Card
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                      child: _buildStitchSparklineCard(totalMonthly, currency),
                     ),
                   ),
-
-                // 📈 Stitch 6-Month Cash Flow Sparkline Graph Card
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                    child: _buildStitchSparklineCard(totalMonthly, currency),
-                  ),
-                ),
+                ],
 
                 SliverToBoxAdapter(
                   child: SizedBox(height: 120 + MediaQuery.paddingOf(context).bottom),
@@ -1148,6 +1156,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isActive = _activeNavIndex == index;
+    final isPro = ref.watch(isProProvider);
+    final isProLocked = index == 2 && !isPro;
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
@@ -1176,16 +1187,148 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               color: isActive ? const Color(0xFFD0BCFF) : const Color(0xFF958EA0),
             ),
             const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-                color: isActive ? const Color(0xFFD0BCFF) : const Color(0xFF958EA0),
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                    color: isActive ? const Color(0xFFD0BCFF) : const Color(0xFF958EA0),
+                  ),
+                ),
+                if (isProLocked) ...[
+                  const SizedBox(width: 3),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: const Text("PRO", style: TextStyle(fontSize: 7.5, fontWeight: FontWeight.bold, color: Color(0xFFFDE68A))),
+                  ),
+                ],
+              ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildStitchAnalyticsProGate(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF261942),
+            Color(0xFF170F2C),
+            Color(0xFF0F0B1E),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0xFFF59E0B).withValues(alpha: 0.6),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+            blurRadius: 24,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.4)),
+            ),
+            child: const Icon(
+              CupertinoIcons.lock_shield_fill,
+              size: 32,
+              color: Color(0xFFFBBF24),
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            "Runway Spend Analytics",
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              letterSpacing: -0.4,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Text(
+              "SUBGHOST VIP EXCLUSIVE",
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.0,
+                color: Color(0xFFFDE68A),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            "Gain deep visual insights into recurring cash burn velocity, categorical distribution charts, annual runway projections, and tax-ready CSV exports.",
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: Colors.white.withValues(alpha: 0.6),
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 22),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8B5CF6),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 6,
+              ),
+              onPressed: () {
+                HapticFeedback.heavyImpact();
+                Navigator.of(context).push(
+                  CupertinoPageRoute(fullscreenDialog: true, builder: (_) => const PaywallScreen()),
+                );
+              },
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(CupertinoIcons.sparkles, size: 16, color: Color(0xFFFDE68A)),
+                  SizedBox(width: 8),
+                  Text(
+                    "Unlock Runway Analytics",
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

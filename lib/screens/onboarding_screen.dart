@@ -1,9 +1,11 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/subscription.dart';
 import '../providers/subscription_provider.dart';
+import '../services/paywall_service.dart';
 import '../services/storage_service.dart';
 import 'dashboard_screen.dart';
 
@@ -44,58 +46,79 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
   // 3. Shimmer Controller for the primary CTA button
   late final AnimationController _shimmerController;
 
-  final List<QuickServicePreset> _presets = [
-    QuickServicePreset(
-      id: 'netflix',
-      name: 'Netflix',
-      cost: 15.99,
-      category: 'Entertainment',
-      icon: const Text(
-        'N',
-        style: TextStyle(
-          color: Color(0xFFE50914),
-          fontWeight: FontWeight.w900,
-          fontSize: 20,
-          fontFamily: 'serif',
+  List<QuickServicePreset> get _presets {
+    final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+    return [
+      const QuickServicePreset(
+        id: 'netflix',
+        name: 'Netflix',
+        cost: 15.99,
+        category: 'Entertainment',
+        icon: Text(
+          'N',
+          style: TextStyle(
+            color: Color(0xFFE50914),
+            fontWeight: FontWeight.w900,
+            fontSize: 20,
+            fontFamily: 'serif',
+          ),
         ),
       ),
-    ),
-    QuickServicePreset(
-      id: 'spotify',
-      name: 'Spotify',
-      cost: 16.99,
-      category: 'Music',
-      icon: const Icon(CupertinoIcons.waveform, color: Color(0xFF1DB954), size: 20),
-    ),
-    QuickServicePreset(
-      id: 'youtube',
-      name: 'YouTube',
-      cost: 13.99,
-      category: 'Entertainment',
-      icon: const Icon(CupertinoIcons.play_circle_fill, color: Color(0xFFFF0000), size: 20),
-    ),
-    QuickServicePreset(
-      id: 'apple_one',
-      name: 'Apple One',
-      cost: 37.95,
-      category: 'Cloud & Storage',
-      icon: const Icon(CupertinoIcons.device_laptop, color: Colors.white, size: 19),
-    ),
-    QuickServicePreset(
-      id: 'chatgpt',
-      name: 'ChatGPT',
-      cost: 20.00,
-      category: 'Productivity',
-      icon: const Icon(CupertinoIcons.sparkles, color: Color(0xFF10A37F), size: 19),
-    ),
-    QuickServicePreset(
-      id: 'icloud',
-      name: 'iCloud+',
-      cost: 2.99,
-      category: 'Cloud & Storage',
-      icon: const Icon(CupertinoIcons.cloud_fill, color: Color(0xFF4CD7F6), size: 19),
-    ),
-  ];
+      const QuickServicePreset(
+        id: 'spotify',
+        name: 'Spotify',
+        cost: 16.99,
+        category: 'Music',
+        icon: Icon(CupertinoIcons.waveform, color: Color(0xFF1DB954), size: 20),
+      ),
+      const QuickServicePreset(
+        id: 'youtube',
+        name: 'YouTube',
+        cost: 13.99,
+        category: 'Entertainment',
+        icon: Icon(CupertinoIcons.play_circle_fill, color: Color(0xFFFF0000), size: 20),
+      ),
+      if (isAndroid)
+        const QuickServicePreset(
+          id: 'google_one',
+          name: 'Google One',
+          cost: 2.99,
+          category: 'Cloud & Storage',
+          icon: Icon(CupertinoIcons.cloud_fill, color: Color(0xFF4285F4), size: 19),
+        )
+      else
+        const QuickServicePreset(
+          id: 'apple_one',
+          name: 'Apple One',
+          cost: 37.95,
+          category: 'Cloud & Storage',
+          icon: Icon(CupertinoIcons.device_laptop, color: Colors.white, size: 19),
+        ),
+      const QuickServicePreset(
+        id: 'chatgpt',
+        name: 'ChatGPT',
+        cost: 20.00,
+        category: 'Productivity',
+        icon: Icon(CupertinoIcons.sparkles, color: Color(0xFF10A37F), size: 19),
+      ),
+      if (isAndroid)
+        const QuickServicePreset(
+          id: 'amazon_prime',
+          name: 'Amazon Prime',
+          cost: 14.99,
+          category: 'Shopping',
+          icon: Icon(CupertinoIcons.cart_fill, color: Color(0xFFFF9900), size: 19),
+        )
+      else
+        const QuickServicePreset(
+          id: 'icloud',
+          name: 'iCloud+',
+          cost: 2.99,
+          category: 'Cloud & Storage',
+          icon: Icon(CupertinoIcons.cloud_fill, color: Color(0xFF4CD7F6), size: 19),
+        ),
+    ];
+  }
 
   @override
   void initState() {
@@ -554,6 +577,18 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen>
               if (isSelected) {
                 _selectedIds.remove(preset.id);
               } else {
+                final isPro = ref.read(isProProvider);
+                if (!isPro && _selectedIds.length >= PaywallService.freeSubscriptionLimit) {
+                  HapticFeedback.heavyImpact();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("🔒 Free tier includes up to 3 starter subscriptions. Unlock VIP for unlimited."),
+                      backgroundColor: Color(0xFFF59E0B),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                  return;
+                }
                 _selectedIds.add(preset.id);
               }
             });

@@ -73,8 +73,13 @@ class ProStatusNotifier extends StateNotifier<bool> {
   }
 
   Future<void> toggleDebug() async {
-    await PaywallService.toggleDebugPro();
-    state = StorageService.isProLocallyUnlocked();
+    final next = await PaywallService.toggleDebugPro();
+    state = next;
+  }
+
+  Future<void> resetToFree() async {
+    await PaywallService.resetToFreeTier();
+    state = false;
   }
 }
 

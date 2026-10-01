@@ -91,6 +91,21 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
     );
 
     if (widget.existingSubscription == null) {
+      final isPro = ref.read(isProProvider);
+      final currentSubs = ref.read(subscriptionsProvider);
+      if (!isPro && currentSubs.length >= PaywallService.freeSubscriptionLimit) {
+        HapticFeedback.heavyImpact();
+        Navigator.of(context).push(
+          CupertinoPageRoute(fullscreenDialog: true, builder: (_) => const PaywallScreen()),
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("🔒 Free tier limit reached (3 subscriptions). Unlock VIP for unlimited vaults."),
+            backgroundColor: Color(0xFFF59E0B),
+          ),
+        );
+        return;
+      }
       await ref.read(subscriptionsProvider.notifier).addSubscription(sub);
     } else {
       await ref.read(subscriptionsProvider.notifier).updateSubscription(sub);

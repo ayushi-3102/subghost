@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +19,8 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
     return Scaffold(
       backgroundColor: const Color(0xFF030206), // Deep Space Obsidian
       body: Stack(
@@ -93,10 +96,14 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  success ? "VIP Privileges Restored!" : "No previous license found.",
+                                  success
+                                      ? "VIP Privileges Restored!"
+                                      : (isAndroid
+                                          ? "No previous Google Play license found."
+                                          : "No previous Apple ID license found."),
                                   style: const TextStyle(fontWeight: FontWeight.w600),
                                 ),
-                                backgroundColor: const Color(0xFF8B5CF6),
+                                backgroundColor: success ? const Color(0xFF8B5CF6) : const Color(0xFF374151),
                               ),
                             );
                             if (success) Navigator.of(context).pop();
@@ -157,8 +164,10 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                         ),
                         _buildLuxuryFeature(
                           CupertinoIcons.lock_shield_fill,
-                          "Biometric FaceID Lock",
-                          "Encrypted on-device vault protected by your biometric key",
+                          isAndroid ? "Biometric Security Lock" : "Biometric FaceID Lock",
+                          isAndroid
+                              ? "Encrypted on-device vault protected by fingerprint or face unlock"
+                              : "Encrypted on-device vault protected by your biometric key",
                         ),
                         _buildLuxuryFeature(
                           CupertinoIcons.bell_fill,
@@ -239,17 +248,57 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                                 ? null
                                 : () async {
                                     HapticFeedback.heavyImpact();
-                                    setState(() => _isLoading = true);
-                                    await ref.read(isProProvider.notifier).toggleDebug();
-                                    setState(() => _isLoading = false);
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text("✨ Welcome to the SubGhost VIP Tier."),
-                                          backgroundColor: Color(0xFF7C3AED),
+                                    if (PaywallService.hasLiveBillingKey) {
+                                      setState(() => _isLoading = true);
+                                      // Real Google Play / StoreKit billing
+                                      final success = await PaywallService.restorePurchases();
+                                      setState(() => _isLoading = false);
+                                      if (context.mounted && success) {
+                                        Navigator.of(context).pop();
+                                      }
+                                    } else {
+                                      // Offline / Mock / Test mode
+                                      showCupertinoDialog(
+                                        context: context,
+                                        builder: (ctx) => CupertinoAlertDialog(
+                                          title: Text(isAndroid ? "Google Play In-App Purchase" : "Apple StoreKit Purchase"),
+                                          content: Padding(
+                                            padding: const EdgeInsets.only(top: 8.0),
+                                            child: Text(
+                                              isAndroid
+                                                  ? "In this offline-first build, Google Play Billing requires a connected Google Play Store account with active merchant SKUs.\n\nTo test the Free Tier limits vs. VIP privileges, you can choose to simulate an unlock below or test free tier limits in Settings."
+                                                  : "In this offline build, Apple StoreKit requires sandbox credentials.\n\nYou can simulate VIP unlock below or test free tier limits in Settings.",
+                                              textAlign: TextAlign.left,
+                                              style: const TextStyle(fontSize: 13),
+                                            ),
+                                          ),
+                                          actions: [
+                                            CupertinoDialogAction(
+                                              child: const Text("Stay on Free Tier"),
+                                              onPressed: () => Navigator.of(ctx).pop(),
+                                            ),
+                                            CupertinoDialogAction(
+                                              isDefaultAction: true,
+                                              child: const Text("Simulate VIP Unlock"),
+                                              onPressed: () async {
+                                                Navigator.of(ctx).pop();
+                                                setState(() => _isLoading = true);
+                                                await ref.read(isProProvider.notifier).toggleDebug();
+                                                setState(() => _isLoading = false);
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    const SnackBar(
+                                                      content: Text("✨ VIP Privileges Activated (Simulation)."),
+                                                      backgroundColor: Color(0xFF7C3AED),
+                                                    ),
+                                                  );
+                                                  Navigator.of(context).pop();
+                                                }
+                                              },
+                                            ),
+                                          ],
                                         ),
                                       );
-                                      Navigator.of(context).pop();
                                     }
                                   },
                             child: _isLoading
@@ -275,7 +324,9 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                                 size: 12, color: Colors.white.withValues(alpha: 0.35)),
                             const SizedBox(width: 6),
                             Text(
-                              "Guaranteed by Apple StoreKit • Zero Telemetry",
+                              isAndroid
+                                  ? "Guaranteed by Google Play Billing • Zero Telemetry"
+                                  : "Guaranteed by Apple StoreKit • Zero Telemetry",
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
@@ -292,7 +343,10 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                               onTap: () => _showLegalNotice(
                                 context,
                                 "Privacy Policy",
-                                "SubGhost is 100% offline. Zero tracking, zero analytics, zero external servers. All subscription records remain stored solely on your device.",
+                                "SubGhost operates on a strict 100% Offline-First architecture.\n\n"
+                                "1. Zero Telemetry: No financial data, subscription names, costs, or personal details are collected, transmitted, or stored on external servers.\n\n"
+                                "2. Local Sandbox: All vaults are stored solely on your local device hardware.\n\n"
+                                "3. Third Parties: No third-party trackers or data brokers are integrated.",
                               ),
                               child: Text(
                                 "Privacy Policy",
@@ -307,11 +361,19 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                             GestureDetector(
                               onTap: () => _showLegalNotice(
                                 context,
-                                "Terms of Use (EULA)",
-                                "SubGhost utilizes Apple's Standard EULA. Subscriptions automatically renew unless auto-renew is disabled at least 24 hours prior to renewal. Payments are managed securely via your Apple ID.",
+                                isAndroid ? "Terms of Service (Google Play)" : "Terms of Use (EULA)",
+                                isAndroid
+                                    ? "SubGhost Terms of Service adhere to Google Play Developer policies.\n\n"
+                                      "1. License: You are granted a personal, non-exclusive license to use SubGhost on compatible Android devices.\n\n"
+                                      "2. Subscriptions: Payment is charged to your Google Account upon purchase confirmation. Subscriptions automatically renew unless cancelled in Google Play Subscriptions at least 24 hours prior to renewal.\n\n"
+                                      "3. Restoration: Active lifetime or subscription licenses can be restored on any Android device linked to your Google Account."
+                                    : "SubGhost utilizes Apple's Standard EULA.\n\n"
+                                      "1. License: You are granted a personal, non-exclusive license to use SubGhost on compatible iOS devices.\n\n"
+                                      "2. Subscriptions: Payment will be charged to your Apple ID account upon purchase confirmation. Subscriptions auto-renew unless cancelled at least 24 hours prior to renewal.\n\n"
+                                      "3. Restoration: You may restore active lifetime or subscription purchases on any device linked to your Apple ID at any time.",
                               ),
                               child: Text(
-                                "Terms of Use (EULA)",
+                                isAndroid ? "Terms of Service" : "Terms of Use (EULA)",
                                 style: TextStyle(
                                   fontSize: 10.5,
                                   decoration: TextDecoration.underline,

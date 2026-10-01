@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 class CancellationService {
   static final Map<String, String> _cancellationUrls = {
     'netflix': 'https://www.netflix.com/youraccount',
@@ -14,7 +16,10 @@ class CancellationService {
     'creative cloud': 'https://account.adobe.com/plans',
     'youtube': 'https://www.youtube.com/paid_memberships',
     'youtube premium': 'https://www.youtube.com/paid_memberships',
+    'youtube music': 'https://music.youtube.com',
     'google': 'https://myaccount.google.com/payments-and-subscriptions',
+    'google one': 'https://one.google.com',
+    'google play': 'https://play.google.com/store/account/subscriptions',
     'disney': 'https://www.disneyplus.com/account',
     'hulu': 'https://secure.hulu.com/account',
     'hbo': 'https://auth.max.com/subscription',
@@ -28,7 +33,10 @@ class CancellationService {
         return _cancellationUrls[key];
       }
     }
-    // Fallback Apple Subscriptions URL for iOS apps
+    // Fallback platform subscriptions URL
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return 'https://play.google.com/store/account/subscriptions';
+    }
     return 'https://apps.apple.com/account/subscriptions';
   }
 }

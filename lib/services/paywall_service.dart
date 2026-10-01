@@ -10,17 +10,23 @@ class PaywallService {
   // Free tier limit
   static const int freeSubscriptionLimit = 3;
 
+  static bool get hasLiveBillingKey {
+    if (kIsWeb) return false;
+    final apiKey = defaultTargetPlatform == TargetPlatform.iOS ? appleApiKey : googleApiKey;
+    return apiKey.isNotEmpty && !apiKey.contains("mock");
+  }
+
   static Future<void> initialize() async {
     // Only configure native StoreKit / Play Billing on actual mobile platforms
     // AND only when real, non-mock API keys are configured!
     if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android)) {
       try {
-        final apiKey = defaultTargetPlatform == TargetPlatform.iOS ? appleApiKey : googleApiKey;
-        if (apiKey.isEmpty || apiKey.contains("mock")) {
+        if (!hasLiveBillingKey) {
           debugPrint("PaywallService: Using offline local mode (no live billing key).");
           return;
         }
         await Purchases.setLogLevel(LogLevel.debug);
+        final apiKey = defaultTargetPlatform == TargetPlatform.iOS ? appleApiKey : googleApiKey;
         final configuration = PurchasesConfiguration(apiKey);
         await Purchases.configure(configuration);
       } catch (e) {
@@ -36,7 +42,7 @@ class PaywallService {
       return true;
     }
 
-    if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android)) {
+    if (hasLiveBillingKey && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android)) {
       try {
         final customerInfo = await Purchases.getCustomerInfo();
         final isPro = customerInfo.entitlements.all[entitlementId]?.isActive == true;
@@ -54,7 +60,7 @@ class PaywallService {
 
   // Restore Purchases
   static Future<bool> restorePurchases() async {
-    if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android)) {
+    if (hasLiveBillingKey && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android)) {
       try {
         final customerInfo = await Purchases.restorePurchases();
         final isPro = customerInfo.entitlements.all[entitlementId]?.isActive == true;
@@ -65,9 +71,8 @@ class PaywallService {
         return false;
       }
     }
-    // Simulation for desktop testing
-    await StorageService.setProLocally(true);
-    return true;
+    // Return actual status without falsely granting Pro
+    return StorageService.isProLocallyUnlocked();
   }
 
   // Purchase Pro Package
@@ -83,9 +88,15 @@ class PaywallService {
     }
   }
 
-  // Debug unlock for development testing on Windows
-  static Future<void> toggleDebugPro() async {
+  // Debug unlock for testing
+  static Future<bool> toggleDebugPro() async {
     final current = StorageService.isProLocallyUnlocked();
-    await StorageService.setProLocally(!current);
+    final next = !current;
+    await StorageService.setProLocally(next);
+    return next;
+  }
+
+  static Future<void> resetToFreeTier() async {
+    await StorageService.setProLocally(false);
   }
 }
