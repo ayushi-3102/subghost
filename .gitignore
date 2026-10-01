@@ -49,3 +49,6 @@ app.*.map.json
 
 scratch/
 
+
+*.ps1
+

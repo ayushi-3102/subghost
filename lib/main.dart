@@ -10,28 +10,43 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // 1. Lock to Portrait orientation (Standard for mobile utilities)
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  try {
+    await SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+  } catch (_) {}
 
   // 2. Set Status bar style to match OLED dark theme
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      statusBarBrightness: Brightness.dark,
-    ),
-  );
+  try {
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+      ),
+    );
+  } catch (_) {}
 
   // 3. Initialize 100% Offline Local Storage (Hive)
-  await StorageService.initialize();
+  try {
+    await StorageService.initialize();
+  } catch (e) {
+    debugPrint("StorageService init error: $e");
+  }
 
   // 4. Initialize Paywall (RevenueCat)
-  await PaywallService.initialize();
+  try {
+    await PaywallService.initialize();
+  } catch (e) {
+    debugPrint("PaywallService init error: $e");
+  }
 
   // 5. Determine starting route (First launch vs Returning user)
-  final hasSeenOnboarding = StorageService.hasSeenOnboarding();
+  bool hasSeenOnboarding = false;
+  try {
+    hasSeenOnboarding = StorageService.hasSeenOnboarding();
+  } catch (_) {}
 
   runApp(
     ProviderScope(

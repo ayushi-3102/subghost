@@ -12,14 +12,19 @@ class PaywallService {
 
   static Future<void> initialize() async {
     // Only configure native StoreKit / Play Billing on actual mobile platforms
+    // AND only when real, non-mock API keys are configured!
     if (!kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android)) {
       try {
-        await Purchases.setLogLevel(LogLevel.debug);
         final apiKey = defaultTargetPlatform == TargetPlatform.iOS ? appleApiKey : googleApiKey;
+        if (apiKey.isEmpty || apiKey.contains("mock")) {
+          debugPrint("PaywallService: Using offline local mode (no live billing key).");
+          return;
+        }
+        await Purchases.setLogLevel(LogLevel.debug);
         final configuration = PurchasesConfiguration(apiKey);
         await Purchases.configure(configuration);
       } catch (e) {
-        debugPrint("RevenueCat config note: $e");
+        debugPrint("RevenueCat initialization bypassed gracefully: $e");
       }
     }
   }

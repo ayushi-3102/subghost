@@ -1,4 +1,4 @@
-package com.subzero.app.subzero
+package com.subghost.app
 
 import io.flutter.embedding.android.FlutterActivity
 
