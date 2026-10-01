@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:purchases_flutter/purchases_flutter.dart';
 import '../providers/subscription_provider.dart';
 import '../services/paywall_service.dart';
 
@@ -16,6 +17,40 @@ class PaywallScreen extends ConsumerStatefulWidget {
 class _PaywallScreenState extends ConsumerState<PaywallScreen> {
   bool _isLoading = false;
   int _selectedTier = 1; // 0 = monthly, 1 = lifetime (recommended)
+  Package? _monthlyPackage;
+  Package? _lifetimePackage;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLiveOfferings();
+  }
+
+  Future<void> _fetchLiveOfferings() async {
+    if (!PaywallService.hasLiveBillingKey) return;
+    try {
+      final offerings = await PaywallService.getOfferings();
+      if (mounted && offerings != null && offerings.current != null) {
+        setState(() {
+          final current = offerings.current!;
+          _monthlyPackage = current.monthly;
+          _lifetimePackage = current.lifetime;
+
+          for (final pkg in current.availablePackages) {
+            final id = pkg.identifier.toLowerCase();
+            if (_monthlyPackage == null && (id.contains('month') || pkg.packageType == PackageType.monthly)) {
+              _monthlyPackage = pkg;
+            }
+            if (_lifetimePackage == null && (id.contains('life') || pkg.packageType == PackageType.lifetime)) {
+              _lifetimePackage = pkg;
+            }
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading RevenueCat offerings: $e");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -183,137 +218,175 @@ class _PaywallScreenState extends ConsumerState<PaywallScreen> {
                         const SizedBox(height: 28),
 
                         // Tier Selection
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildTierSelector(
-                                title: "Monthly",
-                                price: "\$2.99",
-                                unit: "/ month",
-                                subtitle: "Cancel anytime",
-                                isSelected: _selectedTier == 0,
-                                onTap: () {
-                                  HapticFeedback.selectionClick();
-                                  setState(() => _selectedTier = 0);
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildTierSelector(
-                                title: "Lifetime VIP",
-                                price: "\$9.99",
-                                unit: "one-time",
-                                subtitle: "Yours for eternity",
-                                isBestValue: true,
-                                isSelected: _selectedTier == 1,
-                                onTap: () {
-                                  HapticFeedback.selectionClick();
-                                  setState(() => _selectedTier = 1);
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
+                        Builder(
+                          builder: (context) {
+                            final monthlyPriceStr = _monthlyPackage?.storeProduct.priceString ?? "\$2.99";
+                            final lifetimePriceStr = _lifetimePackage?.storeProduct.priceString ?? "\$9.99";
 
-                        const SizedBox(height: 24),
+                            return Column(
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildTierSelector(
+                                        title: "Monthly",
+                                        price: monthlyPriceStr,
+                                        unit: "/ month",
+                                        subtitle: "Cancel anytime",
+                                        isSelected: _selectedTier == 0,
+                                        onTap: () {
+                                          HapticFeedback.selectionClick();
+                                          setState(() => _selectedTier = 0);
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: _buildTierSelector(
+                                        title: "Lifetime VIP",
+                                        price: lifetimePriceStr,
+                                        unit: "one-time",
+                                        subtitle: "Yours for eternity",
+                                        isBestValue: true,
+                                        isSelected: _selectedTier == 1,
+                                        onTap: () {
+                                          HapticFeedback.selectionClick();
+                                          setState(() => _selectedTier = 1);
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 24),
 
-                        // Luxury CTA Button
-                        Container(
-                          width: double.infinity,
-                          height: 58,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(20),
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFA855F7), Color(0xFF6366F1)],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFA855F7).withValues(alpha: 0.45),
-                                blurRadius: 28,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.transparent,
-                              foregroundColor: Colors.white,
-                              shadowColor: Colors.transparent,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                            ),
-                            onPressed: _isLoading
-                                ? null
-                                : () async {
-                                    HapticFeedback.heavyImpact();
-                                    if (PaywallService.hasLiveBillingKey) {
-                                      setState(() => _isLoading = true);
-                                      // Real Google Play / StoreKit billing
-                                      final success = await PaywallService.restorePurchases();
-                                      setState(() => _isLoading = false);
-                                      if (context.mounted && success) {
-                                        Navigator.of(context).pop();
-                                      }
-                                    } else {
-                                      // Offline / Mock / Test mode
-                                      showCupertinoDialog(
-                                        context: context,
-                                        builder: (ctx) => CupertinoAlertDialog(
-                                          title: Text(isAndroid ? "Google Play In-App Purchase" : "Apple StoreKit Purchase"),
-                                          content: Padding(
-                                            padding: const EdgeInsets.only(top: 8.0),
-                                            child: Text(
-                                              isAndroid
-                                                  ? "In this offline-first build, Google Play Billing requires a connected Google Play Store account with active merchant SKUs.\n\nTo test the Free Tier limits vs. VIP privileges, you can choose to simulate an unlock below or test free tier limits in Settings."
-                                                  : "In this offline build, Apple StoreKit requires sandbox credentials.\n\nYou can simulate VIP unlock below or test free tier limits in Settings.",
-                                              textAlign: TextAlign.left,
-                                              style: const TextStyle(fontSize: 13),
-                                            ),
-                                          ),
-                                          actions: [
-                                            CupertinoDialogAction(
-                                              child: const Text("Stay on Free Tier"),
-                                              onPressed: () => Navigator.of(ctx).pop(),
-                                            ),
-                                            CupertinoDialogAction(
-                                              isDefaultAction: true,
-                                              child: const Text("Simulate VIP Unlock"),
-                                              onPressed: () async {
-                                                Navigator.of(ctx).pop();
+                                // Luxury CTA Button
+                                Container(
+                                  width: double.infinity,
+                                  height: 58,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(20),
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFFA855F7), Color(0xFF6366F1)],
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(0xFFA855F7).withValues(alpha: 0.45),
+                                        blurRadius: 28,
+                                        offset: const Offset(0, 8),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.transparent,
+                                      foregroundColor: Colors.white,
+                                      shadowColor: Colors.transparent,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                    ),
+                                    onPressed: _isLoading
+                                        ? null
+                                        : () async {
+                                            HapticFeedback.heavyImpact();
+                                            if (PaywallService.hasLiveBillingKey) {
+                                              final targetPackage = _selectedTier == 1 ? _lifetimePackage : _monthlyPackage;
+                                              if (targetPackage != null) {
                                                 setState(() => _isLoading = true);
-                                                await ref.read(isProProvider.notifier).toggleDebug();
+                                                final result = await PaywallService.purchasePackage(targetPackage);
                                                 setState(() => _isLoading = false);
-                                                if (context.mounted) {
+                                                if (!context.mounted) return;
+                                                if (result.success) {
+                                                  ref.read(isProProvider.notifier).checkStatus();
                                                   ScaffoldMessenger.of(context).showSnackBar(
                                                     const SnackBar(
-                                                      content: Text("✨ VIP Privileges Activated (Simulation)."),
-                                                      backgroundColor: Color(0xFF7C3AED),
+                                                      content: Text("🎉 Welcome to SubGhost VIP Centurion!"),
+                                                      backgroundColor: Color(0xFF8B5CF6),
                                                     ),
                                                   );
                                                   Navigator.of(context).pop();
+                                                } else if (!result.userCancelled && result.errorMessage != null) {
+                                                  ScaffoldMessenger.of(context).showSnackBar(
+                                                    SnackBar(
+                                                      content: Text("Payment error: ${result.errorMessage}"),
+                                                      backgroundColor: const Color(0xFF93000A),
+                                                    ),
+                                                  );
                                                 }
-                                              },
+                                              } else {
+                                                setState(() => _isLoading = true);
+                                                await _fetchLiveOfferings();
+                                                setState(() => _isLoading = false);
+                                                if (!context.mounted) return;
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text("Connecting to store catalog... Please try again in a moment."),
+                                                    backgroundColor: Color(0xFF374151),
+                                                  ),
+                                                );
+                                              }
+                                            } else {
+                                              // Offline / Mock / Test mode
+                                              showCupertinoDialog(
+                                                context: context,
+                                                builder: (ctx) => CupertinoAlertDialog(
+                                                  title: Text(isAndroid ? "Google Play In-App Purchase" : "Apple StoreKit Purchase"),
+                                                  content: Padding(
+                                                    padding: const EdgeInsets.only(top: 8.0),
+                                                    child: Text(
+                                                      isAndroid
+                                                          ? "In this offline-first build, Google Play Billing requires a connected Google Play Store account with active merchant SKUs.\n\nTo test the Free Tier limits vs. VIP privileges, you can choose to simulate an unlock below or test free tier limits in Settings."
+                                                          : "In this offline build, Apple StoreKit requires sandbox credentials.\n\nYou can simulate VIP unlock below or test free tier limits in Settings.",
+                                                      textAlign: TextAlign.left,
+                                                      style: const TextStyle(fontSize: 13),
+                                                    ),
+                                                  ),
+                                                  actions: [
+                                                    CupertinoDialogAction(
+                                                      child: const Text("Stay on Free Tier"),
+                                                      onPressed: () => Navigator.of(ctx).pop(),
+                                                    ),
+                                                    CupertinoDialogAction(
+                                                      isDefaultAction: true,
+                                                      child: const Text("Simulate VIP Unlock"),
+                                                      onPressed: () async {
+                                                        Navigator.of(ctx).pop();
+                                                        setState(() => _isLoading = true);
+                                                        await ref.read(isProProvider.notifier).toggleDebug();
+                                                        setState(() => _isLoading = false);
+                                                        if (context.mounted) {
+                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                            const SnackBar(
+                                                              content: Text("✨ VIP Privileges Activated (Simulation)."),
+                                                              backgroundColor: Color(0xFF7C3AED),
+                                                            ),
+                                                          );
+                                                          Navigator.of(context).pop();
+                                                        }
+                                                      },
+                                                    ),
+                                                  ],
+                                                ),
+                                              );
+                                            }
+                                          },
+                                    child: _isLoading
+                                        ? const CupertinoActivityIndicator(color: Colors.white)
+                                        : Text(
+                                            _selectedTier == 1
+                                                ? "Claim Lifetime Membership ($lifetimePriceStr)"
+                                                : "Start Monthly Access ($monthlyPriceStr/mo)",
+                                            style: const TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w800,
+                                              letterSpacing: 0.3,
                                             ),
-                                          ],
-                                        ),
-                                      );
-                                    }
-                                  },
-                            child: _isLoading
-                                ? const CupertinoActivityIndicator(color: Colors.white)
-                                : Text(
-                                    _selectedTier == 1
-                                        ? "Claim Lifetime Membership (\$9.99)"
-                                        : "Start Monthly Access (\$2.99/mo)",
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 0.3,
-                                    ),
+                                          ),
                                   ),
-                          ),
+                                ),
+                              ],
+                            );
+                          },
                         ),
 
                         const SizedBox(height: 14),

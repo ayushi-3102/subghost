@@ -106,4 +106,19 @@ class StorageService {
     final box = Hive.box(_settingsBoxName);
     await box.put('has_seen_onboarding', seen);
   }
+
+  // --- RevenueCat Custom API Key Storage ---
+  static String? getCustomRevenueCatApiKey() {
+    final box = Hive.box(_settingsBoxName);
+    return box.get('rc_custom_api_key');
+  }
+
+  static Future<void> setCustomRevenueCatApiKey(String? key) async {
+    final box = Hive.box(_settingsBoxName);
+    if (key == null || key.trim().isEmpty) {
+      await box.delete('rc_custom_api_key');
+    } else {
+      await box.put('rc_custom_api_key', key.trim());
+    }
+  }
 }

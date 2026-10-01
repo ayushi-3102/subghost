@@ -561,7 +561,9 @@ class SettingsSheet extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
                 ),
-                child: ListTile(
+                child: Column(
+                  children: [
+                    ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                   leading: Icon(
                     isPro ? CupertinoIcons.shield_lefthalf_fill : CupertinoIcons.lock,
@@ -609,7 +611,30 @@ class SettingsSheet extends ConsumerWidget {
                     }
                   },
                 ),
-              ),
+                Divider(color: Colors.white.withValues(alpha: 0.05), height: 1),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  leading: Icon(
+                    PaywallService.hasLiveBillingKey ? CupertinoIcons.check_mark_circled_solid : CupertinoIcons.wrench_fill,
+                    color: PaywallService.hasLiveBillingKey ? const Color(0xFF10B981) : const Color(0xFFA855F7),
+                    size: 20,
+                  ),
+                  title: const Text(
+                    "RevenueCat & Store Billing",
+                    style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Text(
+                    PaywallService.hasLiveBillingKey
+                        ? "Live Connected (${PaywallService.activeApiKey.substring(0, 8)}...)"
+                        : "Offline Simulation (Tap to configure live API key)",
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
+                  ),
+                  trailing: const Icon(CupertinoIcons.chevron_right, color: Colors.white38, size: 16),
+                  onTap: () => _showRevenueCatKeyDialog(context, ref),
+                ),
+              ],
+            ),
+          ),
 
               const SizedBox(height: 28),
 
@@ -721,6 +746,81 @@ class SettingsSheet extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+
+  void _showRevenueCatKeyDialog(BuildContext context, WidgetRef ref) {
+    final controller = TextEditingController(text: StorageService.getCustomRevenueCatApiKey() ?? "");
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text("RevenueCat API Key"),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "Paste your Public Android/iOS API Key (e.g. goog_... or appl_...) from the RevenueCat dashboard:",
+                style: TextStyle(fontSize: 12.5),
+              ),
+              const SizedBox(height: 10),
+              CupertinoTextField(
+                controller: controller,
+                placeholder: "goog_... or appl_...",
+                style: const TextStyle(fontSize: 12.5, color: Colors.white),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1F1D2B),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFA855F7).withValues(alpha: 0.5)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text("Cancel"),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+          if (controller.text.isNotEmpty)
+            CupertinoDialogAction(
+              child: const Text("Reset Default"),
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                await PaywallService.reconfigure("");
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("Reset to default offline simulation mode."),
+                      backgroundColor: Color(0xFF374151),
+                    ),
+                  );
+                }
+              },
+            ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: const Text("Save Key"),
+            onPressed: () async {
+              final key = controller.text.trim();
+              Navigator.of(ctx).pop();
+              if (key.isNotEmpty) {
+                final ok = await PaywallService.reconfigure(key);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(ok ? "✨ RevenueCat key saved and reconfigured!" : "⚠️ Failed to configure key."),
+                      backgroundColor: ok ? const Color(0xFF8B5CF6) : const Color(0xFF93000A),
+                    ),
+                  );
+                }
+              }
+            },
+          ),
+        ],
+      ),
     );
   }
 }
