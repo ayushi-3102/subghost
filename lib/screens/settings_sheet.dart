@@ -8,6 +8,7 @@ import '../services/currency_service.dart';
 import '../services/notification_service.dart';
 import '../services/paywall_service.dart';
 import '../services/storage_service.dart';
+import '../services/backup_service.dart';
 import 'onboarding_screen.dart';
 import 'paywall_screen.dart';
 
@@ -19,6 +20,7 @@ class SettingsSheet extends ConsumerWidget {
     final isPro = ref.watch(isProProvider);
     final currency = ref.watch(currencyProvider);
     final isBiometricOn = ref.watch(biometricEnabledProvider);
+    final isStealthOn = ref.watch(stealthModeProvider);
     final isAndroid = !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
     return Container(
@@ -212,6 +214,25 @@ class SettingsSheet extends ConsumerWidget {
                         _showCurrencyPicker(context, ref, currency);
                       },
                     ),
+                    Divider(color: Colors.white.withValues(alpha: 0.05), height: 1),
+                    SwitchListTile.adaptive(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      activeTrackColor: const Color(0xFF8B5CF6),
+                      secondary: const Icon(CupertinoIcons.eye_slash_fill, color: Color(0xFFA855F7)),
+                      title: const Text(
+                        "Stealth Privacy Mode",
+                        style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: const Text(
+                        "Mask costs and figures across vault into ••••",
+                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                      ),
+                      value: isStealthOn,
+                      onChanged: (val) {
+                        HapticFeedback.mediumImpact();
+                        ref.read(stealthModeProvider.notifier).setStealth(val);
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -226,46 +247,111 @@ class SettingsSheet extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(18),
                   border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
                 ),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  leading: const Icon(CupertinoIcons.doc_text_fill, color: Color(0xFF06B6D4)),
-                  title: Row(
-                    children: [
-                      const Text("Export Vault to CSV", style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
-                      if (!isPro) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.5)),
-                          ),
-                          child: const Text("PRO", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFFFDE68A))),
-                        ),
-                      ],
-                    ],
-                  ),
-                  subtitle: Text("Generate spreadsheet for tax & accounting", style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12)),
-                  trailing: Icon(isPro ? CupertinoIcons.share : CupertinoIcons.lock_fill, color: isPro ? Colors.white54 : const Color(0xFFF59E0B), size: 18),
-                  onTap: () {
-                    if (!isPro) {
-                      HapticFeedback.heavyImpact();
-                      Navigator.of(context).push(
-                        CupertinoPageRoute(fullscreenDialog: true, builder: (_) => const PaywallScreen()),
-                      );
-                      return;
-                    }
-                    HapticFeedback.heavyImpact();
-                    final csv = StorageService.exportToCsv();
-                    Clipboard.setData(ClipboardData(text: csv));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text("📑 Vault exported! CSV copied to clipboard."),
-                        backgroundColor: Color(0xFF06B6D4),
+                child: Column(
+                  children: [
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      leading: const Icon(CupertinoIcons.doc_text_fill, color: Color(0xFF06B6D4)),
+                      title: Row(
+                        children: [
+                          const Text("Export Vault to CSV", style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                          if (!isPro) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF59E0B).withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.5)),
+                              ),
+                              child: const Text("PRO", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFFFDE68A))),
+                            ),
+                          ],
+                        ],
                       ),
-                    );
-                  },
+                      subtitle: const Text("Generate spreadsheet for tax & accounting", style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      trailing: Icon(isPro ? CupertinoIcons.share : CupertinoIcons.lock_fill, color: isPro ? Colors.white54 : const Color(0xFFF59E0B), size: 18),
+                      onTap: () {
+                        if (!isPro) {
+                          HapticFeedback.heavyImpact();
+                          Navigator.of(context).push(
+                            CupertinoPageRoute(fullscreenDialog: true, builder: (_) => const PaywallScreen()),
+                          );
+                          return;
+                        }
+                        HapticFeedback.heavyImpact();
+                        final csv = StorageService.exportToCsv();
+                        Clipboard.setData(ClipboardData(text: csv));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("📑 Vault exported! CSV copied to clipboard."),
+                            backgroundColor: Color(0xFF06B6D4),
+                          ),
+                        );
+                      },
+                    ),
+                    Divider(color: Colors.white.withValues(alpha: 0.05), height: 1),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      leading: const Icon(CupertinoIcons.arrow_down_doc_fill, color: Color(0xFF10B981)),
+                      title: const Text("Export Vault Backup (.JSON)", style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                      subtitle: const Text("Encrypted offline sovereign backup snapshot", style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      trailing: const Icon(CupertinoIcons.doc_on_clipboard_fill, color: Color(0xFF10B981), size: 18),
+                      onTap: () {
+                        HapticFeedback.mediumImpact();
+                        final jsonBackup = BackupService.exportVaultToJson();
+                        Clipboard.setData(ClipboardData(text: jsonBackup));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text("💾 Encrypted vault backup copied to clipboard!"),
+                            backgroundColor: Color(0xFF10B981),
+                          ),
+                        );
+                      },
+                    ),
+                    Divider(color: Colors.white.withValues(alpha: 0.05), height: 1),
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      leading: const Icon(CupertinoIcons.arrow_up_doc_fill, color: Color(0xFFA078FF)),
+                      title: const Text("Restore Vault from Clipboard", style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                      subtitle: const Text("Paste JSON backup into vault storage", style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      trailing: const Icon(CupertinoIcons.chevron_right, color: Colors.white38, size: 16),
+                      onTap: () async {
+                        HapticFeedback.mediumImpact();
+                        final data = await Clipboard.getData('text/plain');
+                        if (!context.mounted) return;
+                        if (data == null || data.text == null || data.text!.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text("⚠️ Clipboard is empty. Copy a valid SubGhost backup first."),
+                              backgroundColor: Color(0xFF93000A),
+                            ),
+                          );
+                          return;
+                        }
+
+                        try {
+                          final count = await BackupService.importVaultFromJson(data.text!);
+                          ref.read(subscriptionsProvider.notifier).loadSubscriptions();
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text("✅ Restored $count subscriptions into your vault!"),
+                              backgroundColor: const Color(0xFF10B981),
+                            ),
+                          );
+                        } catch (e) {
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text("❌ Failed to restore backup: $e"),
+                              backgroundColor: const Color(0xFF93000A),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ],
                 ),
               ),
 

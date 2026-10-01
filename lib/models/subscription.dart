@@ -9,6 +9,10 @@ class Subscription {
   final String category;
   final String? iconName;
   final String? notes;
+  final bool isTrial;
+  final DateTime? trialEndDate;
+  final int splitCount; // 1 = solo, 2+ = split with family/friends
+  final String? paymentMethod; // e.g. 'Google Pay', 'Apple Pay', 'Amex', 'Visa'
 
   Subscription({
     required this.id,
@@ -19,31 +23,40 @@ class Subscription {
     this.category = 'General',
     this.iconName,
     this.notes,
+    this.isTrial = false,
+    this.trialEndDate,
+    this.splitCount = 1,
+    this.paymentMethod,
   });
 
-  // Calculate annual cost for spend analytics
+  // Effective cost after family/roommate split
+  double get effectiveCost => splitCount > 1 ? (cost / splitCount) : cost;
+
+  // Calculate annual cost for spend analytics (based on user's actual share)
   double get annualCost {
+    final c = effectiveCost;
     switch (billingCycle.toLowerCase()) {
       case 'weekly':
-        return cost * 52;
+        return c * 52;
       case 'yearly':
-        return cost;
+        return c;
       case 'monthly':
       default:
-        return cost * 12;
+        return c * 12;
     }
   }
 
-  // Calculate monthly normalized cost
+  // Calculate monthly normalized cost (based on user's actual share)
   double get monthlyCost {
+    final c = effectiveCost;
     switch (billingCycle.toLowerCase()) {
       case 'weekly':
-        return (cost * 52) / 12;
+        return (c * 52) / 12;
       case 'yearly':
-        return cost / 12;
+        return c / 12;
       case 'monthly':
       default:
-        return cost;
+        return c;
     }
   }
 
@@ -57,6 +70,10 @@ class Subscription {
       'category': category,
       'iconName': iconName,
       'notes': notes,
+      'isTrial': isTrial,
+      'trialEndDate': trialEndDate?.toIso8601String(),
+      'splitCount': splitCount,
+      'paymentMethod': paymentMethod,
     };
   }
 
@@ -70,6 +87,10 @@ class Subscription {
       category: map['category'] ?? 'General',
       iconName: map['iconName'],
       notes: map['notes'],
+      isTrial: map['isTrial'] as bool? ?? false,
+      trialEndDate: map['trialEndDate'] != null ? DateTime.tryParse(map['trialEndDate']) : null,
+      splitCount: (map['splitCount'] as num?)?.toInt() ?? 1,
+      paymentMethod: map['paymentMethod'] as String?,
     );
   }
 
@@ -86,6 +107,10 @@ class Subscription {
     String? category,
     String? iconName,
     String? notes,
+    bool? isTrial,
+    DateTime? trialEndDate,
+    int? splitCount,
+    String? paymentMethod,
   }) {
     return Subscription(
       id: id ?? this.id,
@@ -96,6 +121,10 @@ class Subscription {
       category: category ?? this.category,
       iconName: iconName ?? this.iconName,
       notes: notes ?? this.notes,
+      isTrial: isTrial ?? this.isTrial,
+      trialEndDate: trialEndDate ?? this.trialEndDate,
+      splitCount: splitCount ?? this.splitCount,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
     );
   }
 }

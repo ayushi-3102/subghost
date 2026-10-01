@@ -44,6 +44,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final currency = ref.watch(currencyProvider);
     final isPro = ref.watch(isProProvider);
     final isLocked = ref.watch(isVaultLockedProvider);
+    final isStealthOn = ref.watch(stealthModeProvider);
 
     // Filter and sort subscriptions by active view tab
     final filteredSubs = subscriptions.where((sub) {
@@ -83,8 +84,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
 
     final spendParts = totalMonthly.toStringAsFixed(2).split('.');
-    final wholeSpend = spendParts[0];
-    final decimalSpend = spendParts.length > 1 ? spendParts[1] : '00';
+    final wholeSpend = isStealthOn ? '••••' : spendParts[0];
+    final decimalSpend = isStealthOn ? '••' : (spendParts.length > 1 ? spendParts[1] : '00');
 
     return Scaffold(
       backgroundColor: const Color(0xFF0E0E10), // Stitch Surface-Container-Lowest
@@ -200,6 +201,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                 child: const Icon(CupertinoIcons.play_circle_fill, color: Color(0xFFA078FF), size: 16),
                               ),
                             ),
+                            // Stealth Privacy Mode Toggle
+                            GestureDetector(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                ref.read(stealthModeProvider.notifier).toggle();
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: isStealthOn ? const Color(0xFF2E1065) : const Color(0xFF1B1B1D),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: isStealthOn
+                                        ? const Color(0xFFA855F7).withValues(alpha: 0.7)
+                                        : Colors.white.withValues(alpha: 0.08),
+                                  ),
+                                ),
+                                child: Icon(
+                                  isStealthOn ? CupertinoIcons.eye_slash_fill : CupertinoIcons.eye_fill,
+                                  color: isStealthOn ? const Color(0xFFC084FC) : Colors.white70,
+                                  size: 16,
+                                ),
+                              ),
+                            ),
                             const SizedBox(width: 8),
 
                             // Currency Switcher
@@ -305,7 +330,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 14),
                     child: _buildStitchHeroCard(
+                      ref: ref,
                       currency: currency,
+                      isStealthOn: isStealthOn,
                       wholeSpend: wholeSpend,
                       decimalSpend: decimalSpend,
                       activeCount: subscriptions.length,
@@ -404,6 +431,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     child: _buildStitchAnalyticsProGate(context),
                   )
                 else ...[
+                  // Pro Analytics View: Lifestyle Opportunity Cost & Zombie Radar
+                  if (_activeNavIndex == 2 && isPro) ...[
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                        child: _buildOpportunityCostCard(totalMonthly, currency, isStealthOn),
+                      ),
+                    ),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: _buildZombieDetectorCard(subscriptions, currency, isStealthOn),
+                      ),
+                    ),
+                  ],
+
                   // Subscriptions List with Stitch Brand Badges
                   if (filteredSubs.isEmpty)
                     SliverToBoxAdapter(
@@ -424,7 +467,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         delegate: SliverChildBuilderDelegate(
                           (context, index) {
                             final sub = filteredSubs[index];
-                            return _buildStitchSubscriptionItem(context, ref, sub, currency);
+                            return _buildStitchSubscriptionItem(context, ref, sub, currency, isStealthOn);
                           },
                           childCount: filteredSubs.length,
                         ),
@@ -506,7 +549,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   // --- Stitch Hero Spending Overview Card ---
   Widget _buildStitchHeroCard({
+    required WidgetRef ref,
     required String currency,
+    required bool isStealthOn,
     required String wholeSpend,
     required String decimalSpend,
     required int activeCount,
@@ -514,12 +559,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     required Subscription? nextDueSub,
     required int? nextDueDays,
   }) {
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+    return GestureDetector(
+      onDoubleTap: () {
+        HapticFeedback.mediumImpact();
+        ref.read(stealthModeProvider.notifier).toggle();
+      },
+      child: Container(
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
           colors: [
             Color(0xFF2A2A2C), // surface-container-high
             Color(0xFF201F21), // surface-container
@@ -713,7 +763,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   const SizedBox(width: 9),
                   Expanded(
                     child: Text(
-                      "${DateFormat('MMM d').format(nextDueSub.nextBillingDate)} renewal: ${nextDueSub.name} ($currency${nextDueSub.cost.toStringAsFixed(2)})",
+                      "${DateFormat('MMM d').format(nextDueSub.nextBillingDate)} renewal: ${nextDueSub.name} (${isStealthOn ? '$currency••••' : '$currency${nextDueSub.cost.toStringAsFixed(2)}'})",
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 11.5, color: Color(0xFFCBC3D7), fontWeight: FontWeight.w500),
@@ -725,8 +775,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   // --- 📈 Stitch 6-Month Cash Flow Sparkline Graph Card ---
   Widget _buildStitchSparklineCard(double monthly, String currency) {
@@ -795,6 +846,246 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               Text("Sep", style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.4))),
               const Text("Oct", style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFFD0BCFF))),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- Stitch Pro Opportunity Cost Runway Card ---
+  Widget _buildOpportunityCostCard(double monthly, String currency, bool isStealthOn) {
+    // 8% annual return compounded monthly
+    final fiveYearWealth = monthly * 73.47686;
+    final tenYearWealth = monthly * 182.946;
+
+    final display5Y = isStealthOn ? "••••" : "$currency${fiveYearWealth.toStringAsFixed(0)}";
+    final display10Y = isStealthOn ? "••••" : "$currency${tenYearWealth.toStringAsFixed(0)}";
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF241538),
+            Color(0xFF191024),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFA855F7).withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFA855F7).withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(CupertinoIcons.money_dollar_circle_fill, color: Color(0xFFC084FC), size: 18),
+              ),
+              const SizedBox(width: 10),
+              const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "LIFESTYLE OPPORTUNITY COST",
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: Color(0xFFD0BCFF)),
+                  ),
+                  Text(
+                    "If Invested at 8% S&P 500 Index Return",
+                    style: TextStyle(fontSize: 11.5, color: Colors.white60),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("5-Year Wealth", style: TextStyle(fontSize: 11, color: Color(0xFFCBC3D7))),
+                      const SizedBox(height: 4),
+                      Text(
+                        display5Y,
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF4DFFB2)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("10-Year Wealth", style: TextStyle(fontSize: 11, color: Color(0xFFCBC3D7))),
+                      const SizedBox(height: 4),
+                      Text(
+                        display10Y,
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFFD0BCFF)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            "Every recurring charge compounds over time. Redirecting unused vaults directly fuels your financial freedom horizon.",
+            style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.45), height: 1.4),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- Stitch Pro Zombie Leak & Trial Radar ---
+  Widget _buildZombieDetectorCard(List<Subscription> subs, String currency, bool isStealthOn) {
+    final trials = subs.where((s) => s.isTrial).toList();
+    final splits = subs.where((s) => s.splitCount > 1).toList();
+
+    double totalSplitSavings = 0.0;
+    for (final s in splits) {
+      totalSplitSavings += (s.cost - s.effectiveCost);
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1B1B1D),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF93000A).withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(CupertinoIcons.shield_slash_fill, color: Color(0xFFFFB4AB), size: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "ZOMBIE & LEAK DETECTOR",
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: Color(0xFFFFB4AB)),
+                      ),
+                      Text(
+                        "Trial Guardian & Shared Savings",
+                        style: TextStyle(fontSize: 11.5, color: Colors.white60),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: trials.isNotEmpty ? const Color(0xFF93000A) : const Color(0xFF003822),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  trials.isNotEmpty ? "${trials.length} TRIAL ACTIVE" : "RADAR CLEAN",
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.bold,
+                    color: trials.isNotEmpty ? const Color(0xFFFFDAD6) : const Color(0xFF4DFFB2),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          if (trials.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2C1014),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFFFB4AB).withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(CupertinoIcons.exclamationmark_triangle_fill, color: Color(0xFFFFB4AB), size: 14),
+                      SizedBox(width: 6),
+                      Text(
+                        "Action Required: Cancel before card is charged",
+                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFFFFB4AB)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ...trials.map((t) => Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      "• ${t.name}: Trial ends ${t.trialEndDate != null ? DateFormat('MMM d, yyyy').format(t.trialEndDate!) : 'soon'} (Full price: $currency${t.cost.toStringAsFixed(2)})",
+                      style: const TextStyle(fontSize: 11.5, color: Colors.white70),
+                    ),
+                  )),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // Split Savings row
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0E0E10),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Row(
+                  children: [
+                    Icon(CupertinoIcons.person_2_fill, size: 14, color: Color(0xFF38BDF8)),
+                    SizedBox(width: 8),
+                    Text("Shared Plan Monthly Savings", style: TextStyle(fontSize: 12, color: Colors.white70)),
+                  ],
+                ),
+                Text(
+                  isStealthOn ? "$currency••••" : "+$currency${totalSplitSavings.toStringAsFixed(2)}/mo",
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF38BDF8)),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -894,7 +1185,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   // --- Stitch Subscription Item with Real Brand Logos ---
-  Widget _buildStitchSubscriptionItem(BuildContext context, WidgetRef ref, Subscription sub, String currency) {
+  Widget _buildStitchSubscriptionItem(BuildContext context, WidgetRef ref, Subscription sub, String currency, bool isStealthOn) {
     final now = DateTime.now();
     final daysLeft = sub.nextBillingDate.difference(now).inDays;
     final isUrgent = daysLeft >= 0 && daysLeft <= 3;
@@ -957,6 +1248,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             ),
                           ),
                         ),
+                        if (sub.isTrial) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF381E72),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFFD0BCFF).withValues(alpha: 0.4)),
+                            ),
+                            child: const Text(
+                              "TRIAL",
+                              style: TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Color(0xFFD0BCFF)),
+                            ),
+                          ),
+                        ],
                         if (isUrgent) ...[
                           const SizedBox(width: 6),
                           Container(
@@ -973,10 +1279,48 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ],
                       ],
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      "${sub.category} • Renews ${DateFormat('MMM d').format(sub.nextBillingDate)}",
-                      style: const TextStyle(fontSize: 12.5, color: Color(0xFF958EA0)),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 5,
+                      runSpacing: 4,
+                      children: [
+                        Text(
+                          "${sub.category} • ${DateFormat('MMM d').format(sub.nextBillingDate)}",
+                          style: const TextStyle(fontSize: 12, color: Color(0xFF958EA0)),
+                        ),
+                        if (sub.splitCount > 1)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1E293B),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              "÷${sub.splitCount}",
+                              style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.w700, color: Color(0xFF38BDF8)),
+                            ),
+                          ),
+                        if (sub.paymentMethod != null && sub.paymentMethod!.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF2A2A2C),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(CupertinoIcons.creditcard, size: 9, color: Color(0xFFA078FF)),
+                                const SizedBox(width: 3),
+                                Text(
+                                  sub.paymentMethod!,
+                                  style: const TextStyle(fontSize: 9.5, color: Colors.white70),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
                     ),
                   ],
                 ),
@@ -987,7 +1331,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    "$currency${sub.cost.toStringAsFixed(2)}",
+                    isStealthOn ? "$currency••••" : "$currency${sub.cost.toStringAsFixed(2)}",
                     style: const TextStyle(
                       fontSize: 16.5,
                       fontWeight: FontWeight.w700,
@@ -995,7 +1339,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                   ),
                   Text(
-                    sub.billingCycle == 'yearly' ? "/yr" : "/mo",
+                    sub.splitCount > 1
+                        ? (isStealthOn ? "($currency••/ea)" : "($currency${sub.effectiveCost.toStringAsFixed(2)}/ea)")
+                        : (sub.billingCycle == 'yearly' ? "/yr" : "/mo"),
                     style: const TextStyle(fontSize: 11, color: Color(0xFF958EA0)),
                   ),
                 ],
@@ -1380,6 +1726,67 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   "Next charge on ${sub.nextBillingDate.month}/${sub.nextBillingDate.day}/${sub.nextBillingDate.year}",
                   style: TextStyle(fontSize: 13, color: Colors.white.withValues(alpha: 0.5)),
                 ),
+                if (sub.isTrial) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF381E72).withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFD0BCFF).withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(CupertinoIcons.clock_fill, color: Color(0xFFD0BCFF), size: 14),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Active Free Trial • Ends ${sub.trialEndDate != null ? DateFormat('MMM d, yyyy').format(sub.trialEndDate!) : 'soon'}",
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFFD0BCFF)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (sub.splitCount > 1) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF0F172A),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(CupertinoIcons.person_2_fill, color: Color(0xFF38BDF8), size: 14),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Group Split: ÷${sub.splitCount} members • Your share: $currency${sub.effectiveCost.toStringAsFixed(2)}",
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF38BDF8)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                if (sub.paymentMethod != null && sub.paymentMethod!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF1B1B1D),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(CupertinoIcons.creditcard_fill, color: Color(0xFFA078FF), size: 14),
+                        const SizedBox(width: 8),
+                        Text(
+                          "Payment Method: ${sub.paymentMethod}",
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.white70),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 if (sub.notes != null && sub.notes!.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Container(

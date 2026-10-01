@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -26,6 +27,19 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 30));
   String _billingCycle = 'monthly';
   String _category = 'Entertainment';
+  bool _isTrial = false;
+  DateTime _trialEndDate = DateTime.now().add(const Duration(days: 7));
+  int _splitCount = 1;
+  String _paymentMethod = !kIsWeb && defaultTargetPlatform == TargetPlatform.android ? 'Google Pay' : 'Apple Pay';
+
+  final List<String> _paymentMethods = [
+    'Google Pay',
+    'Apple Pay',
+    'Credit Card',
+    'Bank Debit',
+    'PayPal',
+    'UPI / Cash',
+  ];
 
   @override
   void initState() {
@@ -38,6 +52,12 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
       _selectedDate = existing.nextBillingDate;
       _billingCycle = existing.billingCycle;
       _category = existing.category;
+      _isTrial = existing.isTrial;
+      _trialEndDate = existing.trialEndDate ?? DateTime.now().add(const Duration(days: 7));
+      _splitCount = existing.splitCount;
+      if (existing.paymentMethod != null && existing.paymentMethod!.isNotEmpty) {
+        _paymentMethod = existing.paymentMethod!;
+      }
     }
   }
 
@@ -88,6 +108,10 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
       billingCycle: _billingCycle,
       category: _category,
       notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      isTrial: _isTrial,
+      trialEndDate: _isTrial ? _trialEndDate : null,
+      splitCount: _splitCount,
+      paymentMethod: _paymentMethod,
     );
 
     if (widget.existingSubscription == null) {
@@ -396,6 +420,184 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
                                   const Icon(CupertinoIcons.calendar, color: Color(0xFFC084FC), size: 18),
                                 ],
                               ),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+
+                          // --- Free Trial Guardian ---
+                          _buildSectionTitle("FREE TRIAL RADAR"),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF120E22),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: _isTrial
+                                    ? const Color(0xFFF59E0B).withValues(alpha: 0.5)
+                                    : Colors.white.withValues(alpha: 0.08),
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                SwitchListTile.adaptive(
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                                  activeTrackColor: const Color(0xFFF59E0B),
+                                  secondary: Icon(
+                                    CupertinoIcons.hourglass,
+                                    color: _isTrial ? const Color(0xFFFBBF24) : Colors.white54,
+                                    size: 20,
+                                  ),
+                                  title: const Text("Active Free Trial Period", style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                                  subtitle: Text(
+                                    _isTrial ? "Trial alerts active • Tap below to change date" : "Enable if this is a temporary trial period",
+                                    style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
+                                  ),
+                                  value: _isTrial,
+                                  onChanged: (val) {
+                                    HapticFeedback.lightImpact();
+                                    setState(() => _isTrial = val);
+                                  },
+                                ),
+                                if (_isTrial) ...[
+                                  Divider(color: Colors.white.withValues(alpha: 0.05), height: 1),
+                                  ListTile(
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                                    title: const Text("Trial Expiration Date", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+                                    trailing: Text(
+                                      DateFormat('MMM d, yyyy').format(_trialEndDate),
+                                      style: const TextStyle(color: Color(0xFFFBBF24), fontWeight: FontWeight.bold, fontSize: 13.5),
+                                    ),
+                                    onTap: () async {
+                                      HapticFeedback.selectionClick();
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: _trialEndDate,
+                                        firstDate: DateTime.now(),
+                                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                                      );
+                                      if (picked != null) setState(() => _trialEndDate = picked);
+                                    },
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+
+                          // --- Family Plan / Split Calculator ---
+                          _buildSectionTitle("FAMILY PLAN / SPLIT EXPENSES"),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF120E22),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        const Icon(CupertinoIcons.person_2_fill, color: Color(0xFF06B6D4), size: 18),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          _splitCount == 1 ? "Solo Subscription" : "Split with $_splitCount People",
+                                          style: const TextStyle(color: Colors.white, fontSize: 13.5, fontWeight: FontWeight.w600),
+                                        ),
+                                      ],
+                                    ),
+                                    Row(
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(CupertinoIcons.minus_circle_fill, color: Colors.white54, size: 22),
+                                          onPressed: _splitCount > 1
+                                              ? () {
+                                                  HapticFeedback.selectionClick();
+                                                  setState(() => _splitCount--);
+                                                }
+                                              : null,
+                                        ),
+                                        Text(
+                                          "$_splitCount",
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(CupertinoIcons.plus_circle_fill, color: Color(0xFFA855F7), size: 22),
+                                          onPressed: _splitCount < 10
+                                              ? () {
+                                                  HapticFeedback.selectionClick();
+                                                  setState(() => _splitCount++);
+                                                }
+                                              : null,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                                if (_splitCount > 1) ...[
+                                  const SizedBox(height: 6),
+                                  Builder(builder: (context) {
+                                    final totalCost = double.tryParse(_costController.text.replaceAll(',', '.')) ?? 0.0;
+                                    final myShare = totalCost / _splitCount;
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF06B6D4).withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(CupertinoIcons.checkmark_seal_fill, color: Color(0xFF22D3EE), size: 14),
+                                          const SizedBox(width: 6),
+                                          Expanded(
+                                            child: Text(
+                                              "Your Net Share: $currency${myShare.toStringAsFixed(2)} / $_billingCycle (Full plan: $currency${totalCost.toStringAsFixed(2)})",
+                                              style: const TextStyle(color: Color(0xFF22D3EE), fontSize: 11.5, fontWeight: FontWeight.w600),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+
+                          // --- Payment Method & Card Tagging ---
+                          _buildSectionTitle("PAYMENT METHOD / CARD TAG"),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            physics: const BouncingScrollPhysics(),
+                            child: Row(
+                              children: _paymentMethods.map((pm) {
+                                final isSelected = _paymentMethod == pm;
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 8.0),
+                                  child: ChoiceChip(
+                                    label: Text(pm),
+                                    selected: isSelected,
+                                    onSelected: (val) {
+                                      HapticFeedback.selectionClick();
+                                      setState(() => _paymentMethod = pm);
+                                    },
+                                    selectedColor: const Color(0xFF3B1E6D),
+                                    backgroundColor: const Color(0xFF130E22),
+                                    labelStyle: TextStyle(
+                                      color: isSelected ? Colors.white : Colors.white60,
+                                      fontSize: 12,
+                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                                    ),
+                                    side: BorderSide(
+                                      color: isSelected ? const Color(0xFFA855F7) : Colors.white.withValues(alpha: 0.08),
+                                    ),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                  ),
+                                );
+                              }).toList(),
                             ),
                           ),
                           const SizedBox(height: 18),

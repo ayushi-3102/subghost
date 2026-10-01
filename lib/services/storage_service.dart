@@ -85,6 +85,17 @@ class StorageService {
     await box.put('biometric_lock_enabled', enabled);
   }
 
+  // --- Stealth Privacy Mode ---
+  static bool isStealthModeEnabled() {
+    final box = Hive.box(_settingsBoxName);
+    return box.get('stealth_mode_enabled', defaultValue: false);
+  }
+
+  static Future<void> setStealthModeEnabled(bool enabled) async {
+    final box = Hive.box(_settingsBoxName);
+    await box.put('stealth_mode_enabled', enabled);
+  }
+
   // --- First-Time Launch Onboarding ---
   static bool hasSeenOnboarding() {
     final box = Hive.box(_settingsBoxName);

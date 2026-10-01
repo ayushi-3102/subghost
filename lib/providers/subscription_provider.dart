@@ -57,6 +57,26 @@ final isVaultLockedProvider = StateProvider<bool>((ref) {
   return StorageService.isBiometricEnabled();
 });
 
+// --- Stealth Privacy Mode State ---
+final stealthModeProvider = StateNotifierProvider<StealthModeNotifier, bool>((ref) {
+  return StealthModeNotifier();
+});
+
+class StealthModeNotifier extends StateNotifier<bool> {
+  StealthModeNotifier() : super(StorageService.isStealthModeEnabled());
+
+  Future<void> toggle() async {
+    final next = !state;
+    await StorageService.setStealthModeEnabled(next);
+    state = next;
+  }
+
+  Future<void> setStealth(bool value) async {
+    await StorageService.setStealthModeEnabled(value);
+    state = value;
+  }
+}
+
 // --- Pro User Status State ---
 final isProProvider = StateNotifierProvider<ProStatusNotifier, bool>((ref) {
   return ProStatusNotifier();
