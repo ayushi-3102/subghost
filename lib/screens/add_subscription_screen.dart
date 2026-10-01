@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/subscription.dart';
 import '../providers/subscription_provider.dart';
+import '../services/currency_service.dart';
 import '../services/paywall_service.dart';
 import 'paywall_screen.dart';
 
@@ -26,23 +27,12 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
   String _billingCycle = 'monthly';
   String _category = 'Entertainment';
 
-  final List<Map<String, dynamic>> _quickTemplates = [
-    {'name': 'Netflix', 'cost': 15.49, 'category': 'Entertainment', 'cycle': 'monthly'},
-    {'name': 'Spotify', 'cost': 10.99, 'category': 'Music', 'cycle': 'monthly'},
-    {'name': 'Apple One', 'cost': 19.95, 'category': 'Cloud & Media', 'cycle': 'monthly'},
-    {'name': 'Gym & Spa', 'cost': 65.00, 'category': 'Wellness', 'cycle': 'monthly'},
-    {'name': 'Amazon Prime', 'cost': 14.99, 'category': 'Shopping', 'cycle': 'monthly'},
-    {'name': 'ChatGPT Plus', 'cost': 20.00, 'category': 'Intelligence', 'cycle': 'monthly'},
-    {'name': 'YouTube Premium', 'cost': 13.99, 'category': 'Entertainment', 'cycle': 'monthly'},
-    {'name': 'iCloud+ 2TB', 'cost': 9.99, 'category': 'Cloud & Storage', 'cycle': 'monthly'},
-  ];
-
   @override
   void initState() {
     super.initState();
     final existing = widget.existingSubscription;
     _nameController = TextEditingController(text: existing?.name ?? '');
-    _costController = TextEditingController(text: existing != null ? existing.cost.toStringAsFixed(2) : '');
+    _costController = TextEditingController(text: existing != null ? existing.cost.toStringAsFixed(existing.cost.truncateToDouble() == existing.cost ? 0 : 2) : '');
     _notesController = TextEditingController(text: existing?.notes ?? '');
     if (existing != null) {
       _selectedDate = existing.nextBillingDate;
@@ -61,11 +51,16 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
 
   void _applyTemplate(Map<String, dynamic> template) {
     HapticFeedback.lightImpact();
+    final currency = ref.read(currencyProvider);
+    final cost = CurrencyService.getPresetCost(
+      preset: template,
+      cycle: _billingCycle,
+      currencySymbol: currency,
+    );
     setState(() {
       _nameController.text = template['name'];
-      _costController.text = (template['cost'] as double).toStringAsFixed(2);
+      _costController.text = cost.toStringAsFixed(cost.truncateToDouble() == cost ? 0 : 2);
       _category = template['category'];
-      _billingCycle = template['cycle'];
     });
   }
 
@@ -283,14 +278,21 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
                               height: 38,
                               child: ListView.separated(
                                 scrollDirection: Axis.horizontal,
-                                itemCount: _quickTemplates.length,
+                                itemCount: CurrencyService.presetServices.length,
                                 separatorBuilder: (_, __) => const SizedBox(width: 8),
                                 itemBuilder: (context, index) {
-                                  final t = _quickTemplates[index];
+                                  final t = CurrencyService.presetServices[index];
+                                  final currency = ref.watch(currencyProvider);
+                                  final cost = CurrencyService.getPresetCost(
+                                    preset: t,
+                                    cycle: _billingCycle,
+                                    currencySymbol: currency,
+                                  );
+                                  final costStr = cost.truncateToDouble() == cost ? cost.toInt().toString() : cost.toStringAsFixed(2);
                                   return ActionChip(
                                     backgroundColor: const Color(0xFF130E24),
                                     label: Text(
-                                      t['name'],
+                                      "${t['name']} • $currency$costStr",
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 12,
@@ -426,7 +428,41 @@ class _AddSubscriptionScreenState extends ConsumerState<AddSubscriptionScreen> {
       child: GestureDetector(
         onTap: () {
           HapticFeedback.selectionClick();
-          setState(() => _billingCycle = value);
+          if (_billingCycle == value) return;
+          final oldCycle = _billingCycle;
+          final newCycle = value;
+          setState(() {
+            _billingCycle = newCycle;
+
+            // Auto-update price if matched with preset or custom calculation
+            final currentName = _nameController.text.trim().toLowerCase();
+            final matched = CurrencyService.presetServices.firstWhere(
+              (p) => (p['name'] as String).toLowerCase().contains(currentName) ||
+                     (currentName.isNotEmpty && currentName.contains((p['name'] as String).toLowerCase())),
+              orElse: () => {},
+            );
+
+            final currency = ref.read(currencyProvider);
+            if (matched.isNotEmpty) {
+              final cost = CurrencyService.getPresetCost(
+                preset: matched,
+                cycle: newCycle,
+                currencySymbol: currency,
+              );
+              _costController.text = cost.toStringAsFixed(cost.truncateToDouble() == cost ? 0 : 2);
+            } else {
+              final currentCost = double.tryParse(_costController.text.trim()) ?? 0.0;
+              if (currentCost > 0) {
+                if (oldCycle == 'monthly' && newCycle == 'yearly') {
+                  final yearly = currentCost * 12;
+                  _costController.text = yearly.toStringAsFixed(yearly.truncateToDouble() == yearly ? 0 : 2);
+                } else if (oldCycle == 'yearly' && newCycle == 'monthly') {
+                  final monthly = currentCost / 12;
+                  _costController.text = monthly.toStringAsFixed(2);
+                }
+              }
+            }
+          });
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),

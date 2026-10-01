@@ -3,15 +3,35 @@ import '../models/subscription.dart';
 import '../services/storage_service.dart';
 import '../services/paywall_service.dart';
 
+import '../services/currency_service.dart';
+
 // --- Currency State ---
 final currencyProvider = StateNotifierProvider<CurrencyNotifier, String>((ref) {
-  return CurrencyNotifier();
+  return CurrencyNotifier(ref);
 });
 
 class CurrencyNotifier extends StateNotifier<String> {
-  CurrencyNotifier() : super(StorageService.getCurrencySymbol());
+  final Ref _ref;
+  CurrencyNotifier(this._ref) : super(StorageService.getCurrencySymbol());
 
-  Future<void> setCurrency(String symbol) async {
+  Future<void> setCurrency(String symbol, {bool convertExisting = true}) async {
+    final oldSymbol = state;
+    if (oldSymbol == symbol) return;
+
+    if (convertExisting) {
+      final currentSubs = _ref.read(subscriptionsProvider);
+      for (final sub in currentSubs) {
+        final convertedCost = CurrencyService.convert(
+          amount: sub.cost,
+          fromSymbol: oldSymbol,
+          toSymbol: symbol,
+        );
+        final updated = sub.copyWith(cost: convertedCost);
+        await StorageService.saveSubscription(updated);
+      }
+      _ref.read(subscriptionsProvider.notifier).loadSubscriptions();
+    }
+
     await StorageService.setCurrencySymbol(symbol);
     state = symbol;
   }

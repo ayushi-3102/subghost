@@ -45,23 +45,41 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final isPro = ref.watch(isProProvider);
     final isLocked = ref.watch(isVaultLockedProvider);
 
-    // Filter by selected category or upcoming tab
+    // Filter and sort subscriptions by active view tab
     final filteredSubs = subscriptions.where((sub) {
       if (_activeNavIndex == 1) {
-        // Upcoming tab: show bills due within 14 days
+        // Upcoming tab: show bills due within 30 days
         final days = sub.nextBillingDate.difference(DateTime.now()).inDays;
-        return days >= 0 && days <= 14;
+        return days >= 0 && days <= 30;
+      }
+      if (_activeNavIndex == 2) {
+        // Analytics tab: show all ranked by cost
+        return true;
       }
       if (_selectedCategory == 'All') return true;
       return sub.category.toLowerCase().contains(_selectedCategory.toLowerCase());
     }).toList();
 
+    if (_activeNavIndex == 1) {
+      filteredSubs.sort((a, b) => a.nextBillingDate.compareTo(b.nextBillingDate));
+    } else if (_activeNavIndex == 2) {
+      filteredSubs.sort((a, b) => b.monthlyCost.compareTo(a.monthlyCost));
+    }
+
     // Find next urgent renewal
     Subscription? nextDueSub;
     int? nextDueDays;
     if (subscriptions.isNotEmpty) {
-      nextDueSub = subscriptions.first;
-      nextDueDays = nextDueSub.nextBillingDate.difference(DateTime.now()).inDays;
+      final sortedByDate = List<Subscription>.from(subscriptions)
+        ..sort((a, b) => a.nextBillingDate.compareTo(b.nextBillingDate));
+      final futureRenewals = sortedByDate.where((s) => s.nextBillingDate.isAfter(DateTime.now().subtract(const Duration(days: 1))));
+      if (futureRenewals.isNotEmpty) {
+        nextDueSub = futureRenewals.first;
+        nextDueDays = nextDueSub.nextBillingDate.difference(DateTime.now()).inDays;
+      } else {
+        nextDueSub = sortedByDate.first;
+        nextDueDays = nextDueSub.nextBillingDate.difference(DateTime.now()).inDays;
+      }
     }
 
     final spendParts = totalMonthly.toStringAsFixed(2).split('.');
@@ -414,7 +432,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   ),
                 ),
 
-                const SliverToBoxAdapter(child: SizedBox(height: 120)),
+                SliverToBoxAdapter(
+                  child: SizedBox(height: 120 + MediaQuery.paddingOf(context).bottom),
+                ),
               ],
             ),
           ),
@@ -434,7 +454,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: Padding(
-        padding: const EdgeInsets.only(bottom: 74, right: 6),
+        padding: EdgeInsets.only(
+          bottom: 74 + MediaQuery.paddingOf(context).bottom,
+          right: 6,
+        ),
         child: Container(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
@@ -1099,15 +1122,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   // --- Stitch Frosted Bottom Navigation Bar ---
   Widget _buildStitchBottomNavBar(BuildContext context) {
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
     return ClipRRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: Container(
-          height: 64,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: EdgeInsets.fromLTRB(8, 8, 8, 8 + (bottomInset > 0 ? bottomInset : 8)),
           decoration: BoxDecoration(
-            color: const Color(0xFF131315).withValues(alpha: 0.88),
-            border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.06))),
+            color: const Color(0xFF131315).withValues(alpha: 0.94),
+            border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.08))),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -1126,6 +1149,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget _buildNavItem(int index, IconData icon, String label) {
     final isActive = _activeNavIndex == index;
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () {
         HapticFeedback.selectionClick();
         if (index == 3) {
@@ -1136,33 +1160,32 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             backgroundColor: Colors.transparent,
             builder: (_) => const SettingsSheet(),
           );
-        } else if (index == 2) {
-          // Open Paywall / VIP Analytics
-          Navigator.of(context).push(
-            CupertinoPageRoute(fullscreenDialog: true, builder: (_) => const PaywallScreen()),
-          );
         } else {
           setState(() => _activeNavIndex = index);
         }
       },
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            size: 20,
-            color: isActive ? const Color(0xFFD0BCFF) : const Color(0xFF958EA0),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 21,
               color: isActive ? const Color(0xFFD0BCFF) : const Color(0xFF958EA0),
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                color: isActive ? const Color(0xFFD0BCFF) : const Color(0xFF958EA0),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/subscription_provider.dart';
+import '../services/currency_service.dart';
 import '../services/notification_service.dart';
 import '../services/paywall_service.dart';
 import '../services/storage_service.dart';
@@ -451,23 +452,37 @@ class SettingsSheet extends ConsumerWidget {
   }
 
   void _showCurrencyPicker(BuildContext context, WidgetRef ref, String current) {
-    final currencies = ['\$', '€', '£', '¥', '₹', 'C\$'];
     showCupertinoModalPopup(
       context: context,
       builder: (context) {
         return CupertinoActionSheet(
-          title: const Text("Select Currency Unit"),
-          actions: currencies.map((sym) {
+          title: const Text("Select Vault Currency"),
+          message: const Text("Automatically converts all stored subscription amounts using real exchange rates."),
+          actions: CurrencyService.supportedCurrencies.map((c) {
+            final sym = c['symbol']!;
+            final name = c['name']!;
+            final isSelected = sym == current;
             return CupertinoActionSheetAction(
-              onPressed: () {
-                ref.read(currencyProvider.notifier).setCurrency(sym);
+              onPressed: () async {
+                HapticFeedback.selectionClick();
                 Navigator.of(context).pop();
+                await ref.read(currencyProvider.notifier).setCurrency(sym, convertExisting: true);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Converted all subscriptions to $name"),
+                      backgroundColor: const Color(0xFF1E1038),
+                      duration: const Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
               },
               child: Text(
-                sym,
+                name,
                 style: TextStyle(
-                  color: sym == current ? const Color(0xFFA855F7) : Colors.white,
-                  fontWeight: sym == current ? FontWeight.bold : FontWeight.normal,
+                  color: isSelected ? const Color(0xFFA855F7) : Colors.white,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 ),
               ),
             );
