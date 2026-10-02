@@ -65,11 +65,14 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build iOS No-Codesign
-        run: flutter build ios --release --no-codesign
+      - name: Build iOS Simulator (for Appetize.io Browser Testing)
+        run: |
+          flutter build ios --simulator
+          cd build/ios/iphonesimulator
+          zip -r SubGhost-iOS-Simulator.zip Runner.app
 
-      - name: Upload iOS Payload
+      - name: Upload iOS Simulator (Appetize.io)
         uses: actions/upload-artifact@v4
         with:
-          name: subghost-ios-runner
-          path: build/ios/iphoneos/Runner.app
+          name: SubGhost-iOS-Simulator
+          path: build/ios/iphonesimulator/SubGhost-iOS-Simulator.zip
