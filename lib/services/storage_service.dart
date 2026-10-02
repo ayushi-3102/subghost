@@ -121,4 +121,15 @@ class StorageService {
       await box.put('rc_custom_api_key', key.trim());
     }
   }
+
+  // --- Monthly Budget Cap ---
+  static double getMonthlyBudgetCap() {
+    final box = Hive.box(_settingsBoxName);
+    return (box.get('monthly_budget_cap', defaultValue: 100.0) as num).toDouble();
+  }
+
+  static Future<void> setMonthlyBudgetCap(double cap) async {
+    final box = Hive.box(_settingsBoxName);
+    await box.put('monthly_budget_cap', cap);
+  }
 }

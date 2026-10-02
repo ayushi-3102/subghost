@@ -436,7 +436,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     SliverToBoxAdapter(
                       child: Padding(
                         padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                        child: _buildOpportunityCostCard(totalMonthly, currency, isStealthOn),
+                        child: _buildBudgetCapCard(context, ref, totalMonthly, currency, isStealthOn),
                       ),
                     ),
                     SliverToBoxAdapter(
@@ -852,14 +852,45 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  // --- Stitch Pro Opportunity Cost Runway Card ---
-  Widget _buildOpportunityCostCard(double monthly, String currency, bool isStealthOn) {
-    // 8% annual return compounded monthly
-    final fiveYearWealth = monthly * 73.47686;
-    final tenYearWealth = monthly * 182.946;
+  // --- Stitch Pro Monthly Budget Ceiling & Burn Velocity Card ---
+  Widget _buildBudgetCapCard(BuildContext context, WidgetRef ref, double totalMonthly, String currency, bool isStealthOn) {
+    final budgetCap = ref.watch(budgetCapProvider);
+    final isCapSet = budgetCap > 0;
+    final ratio = isCapSet ? (totalMonthly / budgetCap) : 0.0;
+    final clampedProgress = ratio.clamp(0.0, 1.0);
+    final pctUsed = isCapSet ? (ratio * 100).toInt() : 0;
+    final remainingBuffer = isCapSet ? (budgetCap - totalMonthly) : 0.0;
+    final isOverBudget = isCapSet && remainingBuffer < 0;
 
-    final display5Y = isStealthOn ? "••••" : "$currency${fiveYearWealth.toStringAsFixed(0)}";
-    final display10Y = isStealthOn ? "••••" : "$currency${tenYearWealth.toStringAsFixed(0)}";
+    // Color theme based on consumption
+    final Color statusColor;
+    final String statusLabel;
+    final Color badgeBg;
+    if (!isCapSet) {
+      statusColor = const Color(0xFFA078FF);
+      statusLabel = "NO CAP SET";
+      badgeBg = const Color(0xFF2A2A2C);
+    } else if (ratio < 0.80) {
+      statusColor = const Color(0xFF00E296); // Neon mint
+      statusLabel = "HEALTHY BUFFER";
+      badgeBg = const Color(0xFF003822);
+    } else if (ratio <= 1.0) {
+      statusColor = const Color(0xFFFBBF24); // Amber
+      statusLabel = "NEAR CEILING";
+      badgeBg = const Color(0xFF332000);
+    } else {
+      statusColor = const Color(0xFFFF6B6B); // Coral/Red
+      statusLabel = "OVER BUDGET";
+      badgeBg = const Color(0xFF4A000A);
+    }
+
+    final displayBurn = isStealthOn ? "$currency••••" : "$currency${totalMonthly.toStringAsFixed(2)}";
+    final displayBuffer = isStealthOn
+        ? "$currency••••"
+        : (remainingBuffer >= 0
+            ? "+$currency${remainingBuffer.toStringAsFixed(2)}"
+            : "-$currency${(-remainingBuffer).toStringAsFixed(2)}");
+    final displayCap = isStealthOn ? "$currency••••" : "$currency${budgetCap.toStringAsFixed(0)}";
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -868,60 +899,106 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            Color(0xFF241538),
-            Color(0xFF191024),
+            Color(0xFF201F25),
+            Color(0xFF16151B),
           ],
         ),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFA855F7).withValues(alpha: 0.25)),
+        border: Border.all(
+          color: isOverBudget
+              ? const Color(0xFFFF6B6B).withValues(alpha: 0.5)
+              : Colors.white.withValues(alpha: 0.08),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.4),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header Row
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFA855F7).withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(CupertinoIcons.money_dollar_circle_fill, color: Color(0xFFC084FC), size: 18),
-              ),
-              const SizedBox(width: 10),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Row(
                 children: [
-                  Text(
-                    "LIFESTYLE OPPORTUNITY COST",
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2, color: Color(0xFFD0BCFF)),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(CupertinoIcons.speedometer, color: statusColor, size: 18),
                   ),
-                  Text(
-                    "If Invested at 8% S&P 500 Index Return",
-                    style: TextStyle(fontSize: 11.5, color: Colors.white60),
+                  const SizedBox(width: 10),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        "MONTHLY SPENDING CEILING",
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                          color: Color(0xFFCBC3D7),
+                        ),
+                      ),
+                      Text(
+                        isCapSet ? "Target: $displayCap / month" : "No budget target set",
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white70),
+                      ),
+                    ],
                   ),
                 ],
+              ),
+              GestureDetector(
+                onTap: () => _showEditBudgetCapDialog(context, ref, budgetCap, currency),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2A2A2C),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(CupertinoIcons.pencil, size: 11, color: Color(0xFFD0BCFF)),
+                      SizedBox(width: 4),
+                      Text(
+                        "Edit Cap",
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Color(0xFFD0BCFF)),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 18),
+
+          // Outflow vs Safe Buffer Metric Grid
           Row(
             children: [
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.35),
+                    color: const Color(0xFF0E0E10).withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("5-Year Wealth", style: TextStyle(fontSize: 11, color: Color(0xFFCBC3D7))),
+                      const Text("Current Monthly Burn", style: TextStyle(fontSize: 11, color: Color(0xFFCBC3D7))),
                       const SizedBox(height: 4),
                       Text(
-                        display5Y,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF4DFFB2)),
+                        displayBurn,
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white),
                       ),
                     ],
                   ),
@@ -932,17 +1009,27 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.35),
+                    color: const Color(0xFF0E0E10).withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("10-Year Wealth", style: TextStyle(fontSize: 11, color: Color(0xFFCBC3D7))),
+                      Text(
+                        isOverBudget ? "Over Target Limit" : "Safe Budget Buffer",
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isOverBudget ? const Color(0xFFFFB4AB) : const Color(0xFFCBC3D7),
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Text(
-                        display10Y,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFFD0BCFF)),
+                        displayBuffer,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: statusColor,
+                        ),
                       ),
                     ],
                   ),
@@ -950,10 +1037,126 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            "Every recurring charge compounds over time. Redirecting unused vaults directly fuels your financial freedom horizon.",
-            style: TextStyle(fontSize: 11, color: Colors.white.withValues(alpha: 0.45), height: 1.4),
+          const SizedBox(height: 16),
+
+          // Animated Visual Progress Track
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              height: 10,
+              width: double.infinity,
+              color: const Color(0xFF2A2A2C),
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: isCapSet ? clampedProgress : 0.0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        statusColor.withValues(alpha: 0.6),
+                        statusColor,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Progress Footer
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                isCapSet
+                    ? (isStealthOn ? "•••• used" : "$pctUsed% of $displayCap cap used")
+                    : "Tap 'Edit Cap' to set monthly target",
+                style: const TextStyle(fontSize: 11.5, color: Color(0xFF958EA0), fontWeight: FontWeight.w500),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                decoration: BoxDecoration(
+                  color: badgeBg,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.4)),
+                ),
+                child: Text(
+                  statusLabel,
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.bold,
+                    color: statusColor,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Edit Budget Cap Dialog
+  void _showEditBudgetCapDialog(BuildContext context, WidgetRef ref, double currentCap, String currency) {
+    final controller = TextEditingController(text: currentCap > 0 ? currentCap.toStringAsFixed(0) : "100");
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text("Set Monthly Budget Ceiling"),
+        content: Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Set your target maximum recurring outflow per month ($currency). SubGhost will track your safe spending buffer.",
+                style: const TextStyle(fontSize: 12.5),
+              ),
+              const SizedBox(height: 12),
+              CupertinoTextField(
+                controller: controller,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                prefix: Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: Text(currency, style: const TextStyle(color: Color(0xFFA078FF), fontWeight: FontWeight.bold)),
+                ),
+                placeholder: "e.g. 100",
+                style: const TextStyle(fontSize: 14, color: Colors.white),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1F1D2B),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFA855F7).withValues(alpha: 0.5)),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          CupertinoDialogAction(
+            child: const Text("Cancel"),
+            onPressed: () => Navigator.of(ctx).pop(),
+          ),
+          CupertinoDialogAction(
+            isDefaultAction: true,
+            child: const Text("Save Ceiling"),
+            onPressed: () async {
+              final val = double.tryParse(controller.text.trim()) ?? 0.0;
+              Navigator.of(ctx).pop();
+              if (val > 0) {
+                await ref.read(budgetCapProvider.notifier).setCap(val);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("🎯 Monthly spending cap set to $currency${val.toStringAsFixed(0)}!"),
+                      backgroundColor: const Color(0xFF10B981),
+                    ),
+                  );
+                }
+              }
+            },
           ),
         ],
       ),

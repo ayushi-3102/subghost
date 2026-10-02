@@ -77,6 +77,20 @@ class StealthModeNotifier extends StateNotifier<bool> {
   }
 }
 
+// --- Monthly Budget Cap State ---
+final budgetCapProvider = StateNotifierProvider<BudgetCapNotifier, double>((ref) {
+  return BudgetCapNotifier();
+});
+
+class BudgetCapNotifier extends StateNotifier<double> {
+  BudgetCapNotifier() : super(StorageService.getMonthlyBudgetCap());
+
+  Future<void> setCap(double cap) async {
+    await StorageService.setMonthlyBudgetCap(cap);
+    state = cap;
+  }
+}
+
 // --- Pro User Status State ---
 final isProProvider = StateNotifierProvider<ProStatusNotifier, bool>((ref) {
   return ProStatusNotifier();
