@@ -12,11 +12,19 @@ import '../services/backup_service.dart';
 import 'onboarding_screen.dart';
 import 'paywall_screen.dart';
 
-class SettingsSheet extends ConsumerWidget {
+class SettingsSheet extends ConsumerStatefulWidget {
   const SettingsSheet({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsSheet> createState() => _SettingsSheetState();
+}
+
+class _SettingsSheetState extends ConsumerState<SettingsSheet> {
+  bool _showDeveloperLab = false;
+  int _versionTapCount = 0;
+
+  @override
+  Widget build(BuildContext context) {
     final isPro = ref.watch(isProProvider);
     final currency = ref.watch(currencyProvider);
     final isBiometricOn = ref.watch(biometricEnabledProvider);
@@ -553,110 +561,135 @@ class SettingsSheet extends ConsumerWidget {
 
               const SizedBox(height: 22),
 
-              // Section 6: Developer Test Lab
-              _buildSectionTitle("DEVELOPER TEST LAB (TIER SWITCHER)"),
-              Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF130E22),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              // Section 6: Developer Test Lab (Hidden for customers, tap version 7 times to reveal)
+              if (_showDeveloperLab) ...[
+                const SizedBox(height: 22),
+                _buildSectionTitle("DEVELOPER TEST LAB (TIER SWITCHER)"),
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF130E22),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                  ),
+                  child: Column(
+                    children: [
+                      ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        leading: Icon(
+                          isPro ? CupertinoIcons.shield_lefthalf_fill : CupertinoIcons.lock,
+                          color: isPro ? const Color(0xFFA855F7) : const Color(0xFFF59E0B),
+                          size: 20,
+                        ),
+                        title: Text(
+                          isPro ? "Current: VIP Mode" : "Current: Free Tier Mode (3 Limit)",
+                          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          isPro ? "Tap to switch to Free Tier and test limits" : "Tap to switch to VIP and unlock all features",
+                          style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
+                        ),
+                        trailing: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: isPro ? const Color(0xFF3B0764) : const Color(0xFF291B00),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: isPro ? const Color(0xFFA855F7) : const Color(0xFFF59E0B),
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            isPro ? "Test Free" : "Test VIP",
+                            style: TextStyle(
+                              color: isPro ? const Color(0xFFE9D5FF) : const Color(0xFFFDE68A),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        onTap: () async {
+                          HapticFeedback.heavyImpact();
+                          await ref.read(isProProvider.notifier).toggleDebug();
+                          if (context.mounted) {
+                            final nowPro = ref.read(isProProvider);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(nowPro ? "Switched to VIP Tier (Unlocked)" : "Switched to Free Tier (3-Vault Limit & Locked Pro Features)"),
+                                backgroundColor: nowPro ? const Color(0xFF8B5CF6) : const Color(0xFFF59E0B),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                      Divider(color: Colors.white.withValues(alpha: 0.05), height: 1),
+                      ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        leading: Icon(
+                          PaywallService.hasLiveBillingKey ? CupertinoIcons.check_mark_circled_solid : CupertinoIcons.wrench_fill,
+                          color: PaywallService.hasLiveBillingKey ? const Color(0xFF10B981) : const Color(0xFFA855F7),
+                          size: 20,
+                        ),
+                        title: const Text(
+                          "RevenueCat & Store Billing",
+                          style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          PaywallService.hasLiveBillingKey
+                              ? "Live Connected (${PaywallService.activeApiKey.substring(0, 8)}...)"
+                              : "Offline Simulation (Tap to configure live API key)",
+                          style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
+                        ),
+                        trailing: const Icon(CupertinoIcons.chevron_right, color: Colors.white38, size: 16),
+                        onTap: () => _showRevenueCatKeyDialog(context, ref),
+                      ),
+                    ],
+                  ),
                 ),
-                child: Column(
-                  children: [
-                    ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  leading: Icon(
-                    isPro ? CupertinoIcons.shield_lefthalf_fill : CupertinoIcons.lock,
-                    color: isPro ? const Color(0xFFA855F7) : const Color(0xFFF59E0B),
-                    size: 20,
-                  ),
-                  title: Text(
-                    isPro ? "Current: VIP Mode" : "Current: Free Tier Mode (3 Limit)",
-                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(
-                    isPro ? "Tap to switch to Free Tier and test limits" : "Tap to switch to VIP and unlock all features",
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
-                  ),
-                  trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: isPro ? const Color(0xFF3B0764) : const Color(0xFF291B00),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: isPro ? const Color(0xFFA855F7) : const Color(0xFFF59E0B),
-                        width: 1,
-                      ),
-                    ),
-                    child: Text(
-                      isPro ? "Test Free" : "Test VIP",
-                      style: TextStyle(
-                        color: isPro ? const Color(0xFFE9D5FF) : const Color(0xFFFDE68A),
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  onTap: () async {
-                    HapticFeedback.heavyImpact();
-                    await ref.read(isProProvider.notifier).toggleDebug();
-                    if (context.mounted) {
-                      final nowPro = ref.read(isProProvider);
+              ],
+
+              const SizedBox(height: 28),
+
+              // Version & Sovereign Badge (Tap 7 times to unlock Developer Test Lab)
+              Center(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    _versionTapCount++;
+                    if (_versionTapCount >= 7) {
+                      HapticFeedback.heavyImpact();
+                      setState(() {
+                        _showDeveloperLab = !_showDeveloperLab;
+                        _versionTapCount = 0;
+                      });
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(nowPro ? "Switched to VIP Tier (Unlocked)" : "Switched to Free Tier (3-Vault Limit & Locked Pro Features)"),
-                          backgroundColor: nowPro ? const Color(0xFF8B5CF6) : const Color(0xFFF59E0B),
+                          content: Text(_showDeveloperLab
+                              ? "🛠️ Developer Test Lab Unlocked!"
+                              : "🔒 Developer Test Lab Hidden."),
+                          backgroundColor: const Color(0xFF8B5CF6),
+                          duration: const Duration(seconds: 2),
                         ),
                       );
                     }
                   },
-                ),
-                Divider(color: Colors.white.withValues(alpha: 0.05), height: 1),
-                ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  leading: Icon(
-                    PaywallService.hasLiveBillingKey ? CupertinoIcons.check_mark_circled_solid : CupertinoIcons.wrench_fill,
-                    color: PaywallService.hasLiveBillingKey ? const Color(0xFF10B981) : const Color(0xFFA855F7),
-                    size: 20,
-                  ),
-                  title: const Text(
-                    "RevenueCat & Store Billing",
-                    style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(
-                    PaywallService.hasLiveBillingKey
-                        ? "Live Connected (${PaywallService.activeApiKey.substring(0, 8)}...)"
-                        : "Offline Simulation (Tap to configure live API key)",
-                    style: TextStyle(color: Colors.white.withValues(alpha: 0.45), fontSize: 12),
-                  ),
-                  trailing: const Icon(CupertinoIcons.chevron_right, color: Colors.white38, size: 16),
-                  onTap: () => _showRevenueCatKeyDialog(context, ref),
-                ),
-              ],
-            ),
-          ),
-
-              const SizedBox(height: 28),
-
-              // Version & Sovereign Badge
-              Center(
-                child: Column(
-                  children: [
-                    Text(
-                      "SUBGHOST v1.0.0 (BUILD 1)",
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.5,
-                        color: Colors.white.withValues(alpha: 0.3),
+                  child: Column(
+                    children: [
+                      Text(
+                        "SUBGHOST v1.0.0 (BUILD 1)",
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.5,
+                          color: Colors.white.withValues(alpha: 0.3),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "Sovereign Offline Architecture • Zero Cloud Risk",
-                      style: TextStyle(fontSize: 10.5, color: Colors.white.withValues(alpha: 0.2)),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        "Sovereign Offline Architecture • Zero Cloud Risk",
+                        style: TextStyle(fontSize: 10.5, color: Colors.white.withValues(alpha: 0.2)),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
